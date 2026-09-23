@@ -1,0 +1,488 @@
+import React, { useState } from 'react';
+import {
+  Car,
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  Calendar,
+  Send,
+  Mail,
+  ArrowRight,
+  Plus,
+  KeyRound,
+  Wrench,
+  Fuel,
+  FileSpreadsheet,
+  BellRing,
+  RotateCcw,
+  FileSignature,
+} from 'lucide-react';
+import { DatabaseState, Vehicle, Student, Lesson } from '../types';
+import { exportMotToCalendar, sendDesktopNotification } from '../services/notificationService';
+
+interface DashboardViewProps {
+  dbState: DatabaseState;
+  onNavigate: (tab: string) => void;
+  onQuickCheckout: () => void;
+  onQuickNewLesson: () => void;
+  onCheckinVehicle: (vehicle: Vehicle) => void;
+  onOpenEmailWithTemplate: (type: 'mot' | 'medical' | 'schedule' | 'contract', data: any) => void;
+  onExportExcel: () => void;
+}
+
+export const DashboardView: React.FC<DashboardViewProps> = ({
+  dbState,
+  onNavigate,
+  onQuickCheckout,
+  onQuickNewLesson,
+  onCheckinVehicle,
+  onOpenEmailWithTemplate,
+  onExportExcel,
+}) => {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Műszaki vizsga lejárati számítások
+  const getDaysUntil = (targetDateStr: string) => {
+    const target = new Date(targetDateStr).getTime();
+    const today = new Date(todayStr).getTime();
+    return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+  };
+
+  const motAlerts = dbState.vehicles
+    .map((v) => ({
+      vehicle: v,
+      daysLeft: getDaysUntil(v.motDate),
+    }))
+    .filter((item) => item.daysLeft <= 45)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  // Orvosi lejárati figyelmeztetések tanulóknál
+  const medicalAlerts = dbState.students
+    .map((s) => ({
+      student: s,
+      daysLeft: getDaysUntil(s.medicalExamExpiry),
+    }))
+    .filter((item) => item.daysLeft <= 60)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  // Kint lévő járművek
+  const checkedOutVehicles = dbState.vehicles.filter((v) => v.status === 'in_use');
+
+  // Mai órák
+  const todayLessons = dbState.lessons.filter((l) => l.date === todayStr);
+
+  const handleSendAllAlerts = () => {
+    let sentCount = 0;
+    motAlerts.forEach((m) => {
+      const msg = `${m.vehicle.plateNumber} (${m.vehicle.brandModel}) műszaki vizsgája ${m.daysLeft > 0 ? `${m.daysLeft} nap múlva lejár` : 'már lejárt'}!`;
+      const ok = sendDesktopNotification('⚠️ Műszaki vizsga figyelmeztetés', msg);
+      if (ok) sentCount++;
+    });
+
+    medicalAlerts.forEach((med) => {
+      const msg = `${med.student.name} tanuló orvosi alkalmasságija ${med.daysLeft > 0 ? `${med.daysLeft} nap múlva lejár` : 'lejárt'}!`;
+      const ok = sendDesktopNotification('⚠️ Orvosi alkalmassági lejárat', msg);
+      if (ok) sentCount++;
+    });
+
+    alert(
+      sentCount > 0
+        ? `${sentCount} db asztali értesítés sikeresen kiküldve!`
+        : 'Az asztali értesítések küldése befejeződött (ha nem jelent meg ablak, kérjük engedélyezze az asztali értesítéseket a fejlécben).'
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Üdvözlő és gyorsműveleti fejléc */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-5 sm:p-6 text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-slate-700/50">
+        <div>
+          <div className="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-semibold mb-2 border border-amber-500/30">
+            <span>Autósiskola Adminisztrációs Központ</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold">Iskolai Áttekintés & Flottakezelés</h2>
+          <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl">
+            Aktuális jármű kiadások, esedékes műszaki vizsgák, oktatási órák és határidős teendők felügyelete.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onNavigate('registration')}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold shadow-md shadow-amber-500/30 transition-colors cursor-pointer"
+          >
+            <FileSignature className="w-4 h-4" />
+            <span>Új Tanfolyam Regisztráció</span>
+          </button>
+          <button
+            onClick={onQuickNewLesson}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-colors border border-slate-600"
+          >
+            <Plus className="w-4 h-4 text-amber-400" />
+            <span>Új Óra Rögzítése</span>
+          </button>
+          <button
+            onClick={onQuickCheckout}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-colors border border-slate-600"
+          >
+            <KeyRound className="w-4 h-4 text-amber-400" />
+            <span>Jármű Kiadása</span>
+          </button>
+          <button
+            onClick={onExportExcel}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-emerald-700/90 hover:bg-emerald-600 text-white text-xs font-semibold transition-colors"
+            title="Minden adat letöltése Excel (.xlsx) formátumban"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span className="hidden sm:inline">Excel Export</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4 Fő Statisztikai Csempe */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Flotta Állománya</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <Car className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline space-x-2">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">{dbState.vehicles.length} db</span>
+            <span className="text-xs text-emerald-600 font-medium">
+              {dbState.vehicles.filter((v) => v.status === 'active' || v.status === 'in_use').length} üzemképes
+            </span>
+          </div>
+          <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+            <span>Kivonva: {dbState.vehicles.filter((v) => v.status === 'deregistered').length}</span>
+            <span>Szervizben: {dbState.vehicles.filter((v) => v.status === 'service').length}</span>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Kint Lévő Autók</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <KeyRound className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline space-x-2">
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">{checkedOutVehicles.length} db</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">oktatásban</span>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+            {checkedOutVehicles.length > 0 ? 'Aktív tanulóvezetés folyamatban' : 'Minden jármű a telephelyen'}
+          </p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Esedékes Műszakiak</span>
+            <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-950/50 flex items-center justify-center text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline space-x-2">
+            <span className="text-2xl font-bold text-red-600 dark:text-red-400">{motAlerts.length} db</span>
+            <span className="text-xs text-slate-500">45 napon belül</span>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+            {motAlerts.some((m) => m.daysLeft <= 14) ? '⚠️ Sürgős vizsgafelkészítés!' : 'Nincs azonnali lejárat'}
+          </p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Tanulók & Órák</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline space-x-2">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">{dbState.students.length} fő</span>
+            <span className="text-xs text-emerald-600 font-medium">{todayLessons.length} óra mára</span>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+            {dbState.instructors.length} oktató beosztva
+          </p>
+        </div>
+      </div>
+
+      {/* Kétoszlopos nézet: Kint lévő autók & Határidős teendők */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Bal oszlop: Jelenleg kint lévő gépjárművek (7 oszlop) */}
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
+                <Car className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                  Jelenleg Oktatáson Kint Lévő Járművek
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Melyik oktató vitte el a kocsit, mikor és milyen km állással
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => onNavigate('vehicles')}
+              className="text-xs text-amber-600 dark:text-amber-400 font-semibold hover:underline flex items-center space-x-1"
+            >
+              <span>Teljes flotta</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {checkedOutVehicles.length === 0 ? (
+            <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                Jelenleg egyetlen gépjármű sincs kint
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Minden gépkocsi a telephelyen tartózkodik és bevetésre kész.
+              </p>
+              <button
+                onClick={onQuickCheckout}
+                className="mt-3 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors"
+              >
+                Gépjármű kiadása oktatónak
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {checkedOutVehicles.map((veh) => {
+                const instructor = dbState.instructors.find((i) => i.id === veh.currentInstructorId);
+                return (
+                  <div
+                    key={veh.id}
+                    className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2.5 py-0.5 rounded font-mono font-bold text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 shadow-xs">
+                          {veh.plateNumber}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {veh.brandModel}
+                        </span>
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-200/60 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-medium">
+                          {veh.category} kat.
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600 dark:text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
+                        <span>
+                          Oktató: <strong>{instructor ? instructor.name : 'Ismeretlen'}</strong>
+                        </span>
+                        <span>
+                          Kiadva: {veh.checkoutTime ? veh.checkoutTime.replace('T', ' ') : '-'}
+                        </span>
+                        <span>Induló km: {veh.checkoutKm || veh.currentKm} km</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={() => onCheckinVehicle(veh)}
+                        className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shadow-xs"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Visszahozatal Rögzítése</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Ma esedékes vezetési órák */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Mai Vezetési Órák ({todayLessons.length} db)
+              </h4>
+              <button
+                onClick={() => onNavigate('schedule')}
+                className="text-xs text-amber-600 dark:text-amber-400 font-semibold hover:underline"
+              >
+                Órarend megnyitása
+              </button>
+            </div>
+            {todayLessons.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-slate-400 italic py-2">
+                Mára nincs beütemezett vezetési óra rögzítve.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {todayLessons.map((les) => {
+                  const inst = dbState.instructors.find((i) => i.id === les.instructorId);
+                  const stud = dbState.students.find((s) => s.id === les.studentId);
+                  const car = dbState.vehicles.find((v) => v.id === les.vehicleId);
+                  return (
+                    <div
+                      key={les.id}
+                      className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          {les.startTime} - {les.endTime}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                          {les.lessonType}
+                        </span>
+                      </div>
+                      <div className="text-slate-600 dark:text-slate-400">
+                        Tanuló: <strong>{stud?.name}</strong> | Oktató: {inst?.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Autó: {car?.plateNumber} ({car?.brandModel})
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Jobb oszlop: Sürgős Határidők & Teendők (5 oszlop) */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                  Sürgős Határidők & Teendők
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Műszaki vizsgák és orvosi érvényességek
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSendAllAlerts}
+              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors"
+              title="Asztali figyelmeztetés küldése a teendőkről"
+            >
+              <BellRing className="w-3.5 h-3.5 text-amber-500" />
+              <span>Riasztás</span>
+            </button>
+          </div>
+
+          {/* Műszaki vizsga határidők listája */}
+          <div className="space-y-2">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+              <span>Esedékes Műszaki Vizsgák</span>
+              <span className="text-[11px] font-normal text-slate-400">({motAlerts.length} jármű)</span>
+            </div>
+
+            {motAlerts.length === 0 ? (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 py-2">
+                ✓ Minden jármű műszaki érvényessége rendben van.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {motAlerts.map((m) => {
+                  const isExpired = m.daysLeft <= 0;
+                  const isUrgent = m.daysLeft <= 15;
+                  return (
+                    <div
+                      key={m.vehicle.id}
+                      className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                        isExpired
+                          ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200'
+                          : isUrgent
+                          ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50 text-amber-900 dark:text-amber-200'
+                          : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
+                      }`}
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono font-bold">{m.vehicle.plateNumber}</span>
+                          <span className="font-medium truncate max-w-[140px]">
+                            {m.vehicle.brandModel}
+                          </span>
+                        </div>
+                        <div className="text-[11px] opacity-80">
+                          Lejárat: <strong>{m.vehicle.motDate}</strong> ({m.daysLeft > 0 ? `${m.daysLeft} nap van hátra` : 'LEJÁRT!'})
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1 shrink-0">
+                        {/* Naptárba írás gomb (.ics) */}
+                        <button
+                          onClick={() => exportMotToCalendar(m.vehicle)}
+                          className="p-1.5 rounded-md hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                          title="Műszaki vizsga beírása a naptárba (.ics letöltés)"
+                        >
+                          <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        </button>
+
+                        {/* Email küldés sablonnal */}
+                        <button
+                          onClick={() => onOpenEmailWithTemplate('mot', m.vehicle)}
+                          className="p-1.5 rounded-md hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                          title="Értesítő email küldése a műszaki vizsgáról"
+                        >
+                          <Mail className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Tanulói orvosi alkalmassági határidők */}
+          <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
+              <span>Lejáró Tanulói Orvosiak</span>
+              <span className="text-[11px] font-normal text-slate-400">({medicalAlerts.length} tanuló)</span>
+            </div>
+
+            {medicalAlerts.length === 0 ? (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 py-1">
+                ✓ Minden tanuló orvosi igazolása rendben van.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {medicalAlerts.map((med) => (
+                  <div
+                    key={med.student.id}
+                    className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                        {med.student.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Orvosi lejár: {med.student.medicalExamExpiry} ({med.daysLeft} nap)
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => onOpenEmailWithTemplate('medical', med.student)}
+                      className="flex items-center space-x-1 px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 text-[11px] font-medium"
+                      title="Figyelmeztető email a tanulónak"
+                    >
+                      <Mail className="w-3 h-3" />
+                      <span>Emlékeztető</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

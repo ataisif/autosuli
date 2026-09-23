@@ -1,0 +1,6 @@
+{
+  "name": "AutoSuli Flotta & Admin",
+  "description": "Gépjárművezető iskola flottakezelő és adminisztrációs rendszere: műszaki vizsgák, kivonások, javítások, tankolások, oktatói és tanulói órarend ütközésvizsgálattal, Excel import/export és offline titkosított adatbázissal.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

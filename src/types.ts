@@ -1,0 +1,236 @@
+export type VehicleCategory = 'A' | 'B' | 'C' | 'CE' | 'D';
+
+export type VehicleStatus = 'active' | 'in_use' | 'service' | 'deregistered';
+
+export interface Vehicle {
+  id: string;
+  plateNumber: string; // Pl: AA-BC-123 vagy ABC-123
+  brandModel: string; // Pl: Toyota Yaris 1.5 Hybrid
+  year: number;
+  category: VehicleCategory;
+  transmission: 'Manuális' | 'Automata';
+  currentKm: number;
+  status: VehicleStatus;
+  motDate: string; // YYYY-MM-DD (Műszaki vizsga érvényesség)
+  motReminderDays: number;
+  dualPedals: boolean; // Pótpedál felszerelés
+  notes?: string;
+  // Kivonás / Üzembehelyezés adatok
+  deregistrationDate?: string;
+  deregistrationReason?: string;
+  reactivationDate?: string;
+  // Jelenleg kint lévő állapot
+  currentInstructorId?: string;
+  checkoutTime?: string;
+  checkoutKm?: number;
+}
+
+export interface VehicleAssignmentLog {
+  id: string;
+  vehicleId: string;
+  instructorId: string;
+  checkedOutAt: string;
+  checkedInAt?: string;
+  startKm: number;
+  endKm?: number;
+  purpose?: string;
+  notes?: string;
+}
+
+export interface MaintenanceRecord {
+  id: string;
+  vehicleId: string;
+  date: string;
+  type:
+    | 'Időszakos kötelező szerviz'
+    | 'Fékjavítás'
+    | 'Kuplung/Váltó'
+    | 'Olajcsere'
+    | 'Gumicsere'
+    | 'Karosszéria/Fényezés'
+    | 'Műszaki felkészítés'
+    | 'Pótpedál karbantartás'
+    | 'Egyéb javítás';
+  description: string;
+  workshop: string;
+  cost: number;
+  kmAtService: number;
+  status: 'Befejezett' | 'Folyamatban' | 'Tervezett';
+}
+
+export interface FuelLog {
+  id: string;
+  vehicleId: string;
+  instructorId?: string;
+  date: string;
+  currentKm: number;
+  liters: number;
+  totalCost: number;
+  fuelType: 'Benzin (E10)' | 'Gázolaj (B7)' | 'Elektromos (kWh)' | 'LPG';
+  fullTank: boolean;
+  calculatedLitersPer100Km?: number;
+}
+
+export interface Instructor {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  licenseNumber: string; // Oktatói igazolvány száma
+  categories: VehicleCategory[];
+  preferredVehicleId?: string;
+  status: 'active' | 'leave' | 'inactive';
+  color: string;
+  notes?: string;
+}
+
+export type TheoryExamStatus = 'Nem kezdte' | 'Folyamatban' | 'Sikeres' | 'Ismétlő';
+export type PaymentStatus = 'Rendezve' | 'Részletben' | 'Hátralék';
+
+export interface Student {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  category: VehicleCategory;
+  instructorId?: string;
+  theoryExamStatus: TheoryExamStatus;
+  medicalExamExpiry: string; // YYYY-MM-DD
+  completedHours: number; // pl. 26
+  requiredHours: number; // pl. 30
+  completedKm: number; // pl. 510
+  requiredKm: number; // pl. 580
+  paymentStatus: PaymentStatus;
+  status: 'active' | 'exam_ready' | 'graduated' | 'suspended';
+  notes?: string;
+}
+
+export type LessonType =
+  | 'Alapoktatás (tanpálya)'
+  | 'Városi vezetés'
+  | 'Országúti vezetés'
+  | 'Éjszakai vezetés'
+  | 'Gyakorló óra'
+  | 'Hatósági Forgalmi Vizsga';
+
+export interface Lesson {
+  id: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  instructorId: string;
+  studentId: string;
+  vehicleId: string;
+  lessonType: LessonType;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  kmStart?: number;
+  kmEnd?: number;
+  notes?: string;
+}
+
+export interface ScheduleConflict {
+  id: string;
+  type: 'instructor' | 'student' | 'vehicle';
+  severity: 'error' | 'warning';
+  title: string;
+  description: string;
+  lessonA: Lesson;
+  lessonB: Lesson;
+}
+
+export interface NotificationLog {
+  id: string;
+  title: string;
+  message: string;
+  type: 'mot_due' | 'medical_due' | 'service_due' | 'conflict' | 'info';
+  date: string;
+  sentAsDesktop: boolean;
+  sentAsEmail: boolean;
+}
+
+export interface SchoolCompanyInfo {
+  schoolName: string;
+  companyName: string; // Cégnév
+  registrationNumber: string; // Cégjegyzékszám
+  taxNumber: string; // Adószám
+  accreditationNumber: string; // Képzési engedély / nyilvántartási szám
+  address: string; // Székhely / Cím
+  phone: string;
+  email: string;
+  website: string;
+  representativeName: string; // Képviselő / Iskolavezető neve
+  bankAccountNumber: string; // Bankszámlaszám
+  termsText?: string; // Általános képzési szerződési feltételek szövege
+}
+
+export interface CourseOffer {
+  id: string;
+  name: string; // Pl. "B kategóriás személygépkocsi-vezetői tanfolyam"
+  category: VehicleCategory;
+  theoryHours: number; // pl. 28 óra
+  practiceHours: number; // pl. 30 óra
+  requiredKm: number; // pl. 580 km
+  basePrice: number; // Alap tandíj (Ft)
+  examFee: number; // Hatósági vizsgadíj (Ft)
+  description: string;
+  paymentOptions: string[]; // Pl. 'Egyösszegű fizetés', '3 részletben'
+}
+
+export interface CourseRegistration {
+  id: string;
+  contractNumber: string; // Pl. AS-SZERZ-2026/001
+  date: string; // YYYY-MM-DD
+  courseId: string;
+  courseName: string;
+  category: VehicleCategory;
+  
+  // Tanuló adatai
+  studentName: string;
+  birthName?: string;
+  mothersName: string;
+  birthPlace: string;
+  birthDate: string; // YYYY-MM-DD
+  idCardNumber: string; // Személyi igazolvány szám
+  address: string; // Lakcím
+  phone: string;
+  email: string;
+  medicalExamExpiry: string; // Orvosi érvényesség
+  hasExistingLicense?: string; // Meglévő vezetői engedély kategóriák
+  
+  // Választott oktató (opcionális)
+  instructorId?: string;
+  instructorName?: string;
+
+  // Fizetési konstrukció
+  paymentPlan: string;
+  totalFee: number;
+  initialDeposit: number;
+  
+  // Digitális Aláírások (Base64 data URL vagy vector path)
+  studentSignatureSvg?: string;
+  representativeSignatureSvg?: string;
+  signedAt?: string;
+
+  // Státusz
+  status: 'draft' | 'signed' | 'archived';
+  notes?: string;
+  syncedToStudents: boolean; // Automatikusan áttöltve a tanulók közé
+  studentId?: string;
+}
+
+export interface DatabaseState {
+  vehicles: Vehicle[];
+  instructors: Instructor[];
+  students: Student[];
+  lessons: Lesson[];
+  maintenance: MaintenanceRecord[];
+  fuelLogs: FuelLog[];
+  assignmentLogs: VehicleAssignmentLog[];
+  notifications: NotificationLog[];
+  schoolCompany: SchoolCompanyInfo;
+  courseOffers: CourseOffer[];
+  courseRegistrations: CourseRegistration[];
+  isEncrypted: boolean;
+  encryptionPasswordHash?: string;
+  lastSaved: string;
+}
