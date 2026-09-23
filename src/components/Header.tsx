@@ -1,7 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Car,
-  Calendar,
   Clock,
   Users,
   Fuel,
@@ -9,18 +8,23 @@ import {
   Moon,
   Sun,
   ShieldCheck,
-  ShieldAlert,
   Save,
   Printer,
   Bell,
   HelpCircle,
   Database,
-  WifiOff,
-  FileSpreadsheet,
   FileSignature,
   Building2,
+  Palette,
+  LogOut,
+  UserCheck,
+  Shield,
+  Menu,
+  X,
+  ChevronDown,
 } from 'lucide-react';
-import { DatabaseState } from '../types';
+import { DatabaseState, AppUser, DesignTemplateId } from '../types';
+import { THEME_TEMPLATES } from '../services/themeService';
 
 interface HeaderProps {
   activeTab: string;
@@ -33,10 +37,14 @@ interface HeaderProps {
   onOpenShortcutsModal: () => void;
   onOpenEmailModal: () => void;
   onOpenCompanyModal?: () => void;
+  onOpenThemeModal?: () => void;
   onPrintSchedule: () => void;
   onRequestNotifications: () => void;
   notificationsEnabled: boolean;
   urgentCount: number;
+  currentUser: AppUser | null;
+  onLogout: () => void;
+  currentTheme: DesignTemplateId;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -50,99 +58,216 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShortcutsModal,
   onOpenEmailModal,
   onOpenCompanyModal,
+  onOpenThemeModal,
   onPrintSchedule,
   onRequestNotifications,
   notificationsEnabled,
   urgentCount,
+  currentUser,
+  onLogout,
+  currentTheme,
 }) => {
-  const tabs = [
-    { id: 'dashboard', label: 'Áttekintés', icon: LayoutDashboard, shortcut: 'Alt+1' },
-    { id: 'registration', label: 'Tanfolyam Regisztráció', icon: FileSignature, shortcut: 'Alt+2' },
-    { id: 'vehicles', label: 'Gépjárművek & Flotta', icon: Car, shortcut: 'Alt+3' },
-    { id: 'schedule', label: 'Órarend & Ütközések', icon: Clock, shortcut: 'Alt+4' },
-    { id: 'people', label: 'Oktatók & Tanulók', icon: Users, shortcut: 'Alt+5' },
-    { id: 'fuel', label: 'Tankolások & Fogyasztás', icon: Fuel, shortcut: 'Alt+6' },
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  const themeConfig = THEME_TEMPLATES[currentTheme] || THEME_TEMPLATES['amber-classic'];
+
+  const perms = currentUser?.permissions;
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Dinamikus fülek a felhasználó jogosultságai alapján
+  const allTabs = [
+    { id: 'dashboard', label: 'Áttekintés', icon: LayoutDashboard, shortcut: 'Alt+1', allowed: true },
+    {
+      id: 'registration',
+      label: 'Tanfolyam Regisztráció',
+      icon: FileSignature,
+      shortcut: 'Alt+2',
+      allowed: perms ? perms.canRegisterCourses : true,
+    },
+    {
+      id: 'vehicles',
+      label: 'Gépjárművek & Flotta',
+      icon: Car,
+      shortcut: 'Alt+3',
+      allowed: perms ? perms.canCheckoutVehicles || perms.canEditVehicles : true,
+    },
+    {
+      id: 'schedule',
+      label: 'Órarend & Ütközések',
+      icon: Clock,
+      shortcut: 'Alt+4',
+      allowed: perms ? perms.canManageLessons : true,
+    },
+    {
+      id: 'people',
+      label: 'Oktatók & Tanulók',
+      icon: Users,
+      shortcut: 'Alt+5',
+      allowed: perms ? perms.canManageStudents || perms.canManageInstructors : true,
+    },
+    {
+      id: 'fuel',
+      label: 'Tankolások & Fogyasztás',
+      icon: Fuel,
+      shortcut: 'Alt+6',
+      allowed: perms ? perms.canManageFuel : true,
+    },
+    {
+      id: 'users',
+      label: 'Felhasználók & Audit',
+      icon: Shield,
+      shortcut: 'Alt+7',
+      allowed: isAdmin || (perms ? perms.canManageUsers || perms.canViewAuditLogs : false),
+    },
   ];
+
+  const visibleTabs = allTabs.filter((t) => t.allowed);
+
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    setMobileMenuOpen(false);
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors duration-200 no-print">
       {/* Felső információs sáv */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/60">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
-            <Car className="w-6 h-6 stroke-[2.2]" />
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/60">
+        {/* Bal oldal: Logó & Cím */}
+        <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+          <div
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr ${themeConfig.gradientHeader} flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0`}
+          >
+            <Car className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center space-x-2">
-              <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+              <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white truncate">
                 AutoSuli Flotta & Admin
               </h1>
-              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
-                Desktop App (Win / Linux)
+              <span className="hidden md:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                v2.6 RBAC
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Gépjárművezető oktató iskola flottakezelő és adminisztráció
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate hidden xs:block">
+              {dbState.schoolCompany.schoolName}
             </p>
           </div>
         </div>
 
-        {/* Állapotjelzők és eszközök */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
-          {/* Offline / Lokális működés jelző */}
-          <div
-            title="Lokális beépített adatbázis: Az alkalmazás internet nélkül, offline is megbízhatóan működik."
-            className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Offline készenlét</span>
-          </div>
+        {/* Jobb oldal: Felhasználó, Témaváltó, Eszközök */}
+        <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
+          {/* Bejelentkezett Felhasználó Profil Doboz */}
+          {currentUser && (
+            <div className="relative">
+              <button
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className="flex items-center space-x-2 p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 transition-all text-xs"
+                title="Bejelentkezett profil"
+              >
+                <div
+                  className={`w-6 h-6 rounded-lg bg-gradient-to-tr ${currentUser.avatarColor} text-white flex items-center justify-center font-bold text-xs shrink-0`}
+                >
+                  {currentUser.username.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <div className="font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[120px]">
+                    {currentUser.fullName.split(' ')[0]}
+                  </div>
+                  <span
+                    className={`text-[9px] font-extrabold uppercase px-1 py-0.2 rounded ${
+                      currentUser.role === 'admin'
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
+                    }`}
+                  >
+                    {currentUser.role === 'admin' ? 'Admin' : 'Ügyvitel'}
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+              </button>
+
+              {/* Felhasználói lenyíló menü */}
+              {userDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserDropdownOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 text-xs animate-in fade-in zoom-in-95">
+                    <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="font-bold text-slate-900 dark:text-white truncate">
+                        {currentUser.fullName}
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-mono truncate">
+                        @{currentUser.username} • {currentUser.email}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        setActiveTab('users');
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2 text-slate-700 dark:text-slate-300"
+                    >
+                      <Shield className="w-4 h-4 text-amber-500" />
+                      <span>Felhasználók & Jogosultságok</span>
+                    </button>
+
+                    {onOpenThemeModal && (
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenThemeModal();
+                        }}
+                        className="w-full px-3.5 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2 text-slate-700 dark:text-slate-300"
+                      >
+                        <Palette className="w-4 h-4 text-purple-500" />
+                        <span>Dizájn Sablon Váltása</span>
+                      </button>
+                    )}
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center space-x-2 text-red-600 dark:text-red-400 font-semibold"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Kijelentkezés</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Dizájn Sablon gomb */}
+          {onOpenThemeModal && (
+            <button
+              onClick={onOpenThemeModal}
+              className="p-1.5 sm:px-2 sm:py-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center space-x-1 transition-colors"
+              title="Dizájn sablon és színtéma váltása"
+            >
+              <Palette className="w-4 h-4 text-purple-500" />
+              <span className="hidden md:inline text-xs font-medium">Sablonok</span>
+            </button>
+          )}
 
           {/* Automatikus mentés állapot */}
           <div
-            className="flex items-center space-x-1 text-xs text-slate-600 dark:text-slate-400 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800"
+            className="hidden lg:flex items-center space-x-1 text-xs text-slate-600 dark:text-slate-400 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800"
             title="Minden módosítás automatikusan mentésre kerül a helyi adatbázisba"
           >
             <Save className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin text-amber-500' : 'text-emerald-500'}`} />
-            <span className="hidden sm:inline">{isSaving ? 'Mentés...' : 'Auto-mentve'}</span>
+            <span>{isSaving ? 'Mentés...' : 'Auto-mentve'}</span>
           </div>
-
-          {/* Titkosítás állapot gomb */}
-          <button
-            onClick={onOpenDbModal}
-            className={`flex items-center space-x-1 text-xs px-2 py-1 rounded border transition-colors ${
-              dbState.isEncrypted
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300'
-                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 hover:bg-slate-100'
-            }`}
-            title="Adatbázis titkosítás és biztonsági mentések"
-          >
-            {dbState.isEncrypted ? (
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            ) : (
-              <Database className="w-3.5 h-3.5" />
-            )}
-            <span className="hidden sm:inline">
-              {dbState.isEncrypted ? 'AES-GCM Titkosítva' : 'Adatbázis / Excel'}
-            </span>
-          </button>
-
-          {/* Cégadatok szerkesztő gomb */}
-          {onOpenCompanyModal && (
-            <button
-              onClick={onOpenCompanyModal}
-              className="flex items-center space-x-1 text-xs px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              title="Képző szerv és cégadatok módosítása a szerződésekhez"
-            >
-              <Building2 className="w-3.5 h-3.5 text-amber-500" />
-              <span className="hidden lg:inline">Cégadatok</span>
-            </button>
-          )}
 
           {/* Értesítések gomb & számláló */}
           <button
             onClick={onRequestNotifications}
-            className={`relative p-1.5 rounded-lg border transition-colors ${
+            className={`relative p-1.5 rounded-xl border transition-colors ${
               notificationsEnabled
                 ? 'text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
                 : 'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30'
@@ -157,57 +282,47 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Sötét mód kapcsoló */}
+          {/* Sötét / Világos mód */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title={darkMode ? 'Váltás világos módra' : 'Váltás sötét módra'}
           >
             {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
           </button>
 
-          {/* Nyomtatás / PDF gomb */}
+          {/* Mobil Menü Gomb */}
           <button
-            onClick={onPrintSchedule}
-            className="hidden sm:flex items-center space-x-1 p-1.5 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-medium transition-colors"
-            title="Nyomtatási nézet és PDF mentés (Ctrl+P)"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Navigációs menü"
           >
-            <Printer className="w-3.5 h-3.5 text-slate-500" />
-            <span>Nyomtatás / PDF</span>
-          </button>
-
-          {/* Billentyűparancsok gomb */}
-          <button
-            onClick={onOpenShortcutsModal}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Billentyűparancsok áttekintése (?)"
-          >
-            <HelpCircle className="w-4 h-4" />
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Navigációs fülek sávja */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 no-scrollbar">
-          {tabs.map((tab) => {
+      {/* Navigációs fülek sávja (Desktop & Tablet) */}
+      <div className="hidden md:block max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav className="flex space-x-1 sm:space-x-1.5 overflow-x-auto py-2 no-scrollbar">
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all duration-150 ${
+                onClick={() => handleTabClick(tab.id)}
+                className={`flex items-center space-x-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer ${
                   isActive
-                    ? 'bg-amber-500 text-white shadow-sm shadow-amber-500/20'
+                    ? `${themeConfig.primary} text-white shadow-sm shadow-amber-500/20`
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400 dark:text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                 <span>{tab.label}</span>
                 <span
-                  className={`hidden lg:inline text-[10px] px-1 py-0.2 rounded font-mono ${
-                    isActive ? 'bg-amber-600/60 text-amber-100' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-400'
+                  className={`hidden xl:inline text-[9px] px-1 py-0.2 rounded font-mono ${
+                    isActive ? 'bg-black/20 text-white' : 'bg-slate-200/60 dark:bg-slate-800 text-slate-400'
                   }`}
                 >
                   {tab.shortcut}
@@ -217,6 +332,66 @@ export const Header: React.FC<HeaderProps> = ({
           })}
         </nav>
       </div>
+
+      {/* Mobil Lenyíló Menü (Okostelefon optimalizáció) */}
+      {mobileMenuOpen && (
+        <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-3 space-y-1 shadow-lg">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+            Navigációs Menü
+          </div>
+          {visibleTabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  isActive
+                    ? `${themeConfig.primary} text-white font-bold`
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Icon className="w-4 h-4" />
+                  <span>{tab.label}</span>
+                </div>
+                <span className="text-[10px] font-mono opacity-60">{tab.shortcut}</span>
+              </button>
+            );
+          })}
+
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between px-2 text-xs">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenCompanyModal?.();
+              }}
+              className="text-slate-600 dark:text-slate-400 hover:text-amber-500 font-medium py-1"
+            >
+              Cégadatok
+            </button>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenDbModal();
+              }}
+              className="text-slate-600 dark:text-slate-400 hover:text-amber-500 font-medium py-1"
+            >
+              Adatbázis & Mentések
+            </button>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+              className="text-red-500 font-semibold py-1"
+            >
+              Kijelentkezés
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

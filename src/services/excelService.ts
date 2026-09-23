@@ -302,6 +302,20 @@ export async function importDatabaseFromExcel(file: File): Promise<DatabaseState
     schoolCompany: initialDatabase.schoolCompany,
     courseOffers: initialDatabase.courseOffers,
     courseRegistrations: [],
+    users: initialDatabase.users,
+    auditLogs: [
+      {
+        id: `log-imp-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        userId: 'system',
+        username: 'Rendszer',
+        userRole: 'admin',
+        action: 'IMPORT',
+        module: 'USERS',
+        details: 'Adatbázis visszaállítva Excel fájlból.',
+      },
+    ],
+    currentTheme: initialDatabase.currentTheme,
     isEncrypted: false,
     lastSaved: new Date().toISOString(),
   };

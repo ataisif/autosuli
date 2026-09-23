@@ -149,6 +149,9 @@ export async function loadLocalDatabase(password?: string): Promise<DatabaseStat
         schoolCompany: parsed.schoolCompany || initialDatabase.schoolCompany,
         courseOffers: parsed.courseOffers?.length ? parsed.courseOffers : initialDatabase.courseOffers,
         courseRegistrations: parsed.courseRegistrations || initialDatabase.courseRegistrations || [],
+        users: parsed.users?.length ? parsed.users : initialDatabase.users,
+        auditLogs: parsed.auditLogs || initialDatabase.auditLogs || [],
+        currentTheme: parsed.currentTheme || initialDatabase.currentTheme || 'amber-classic',
       };
     }
   } catch (e) {

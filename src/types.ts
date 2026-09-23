@@ -218,6 +218,71 @@ export interface CourseRegistration {
   studentId?: string;
 }
 
+export type UserRole = 'admin' | 'clerk'; // Adminisztrátor vagy Ügyviteli dolgozó
+
+export interface UserPermissions {
+  // Tanfolyam és regisztráció
+  canRegisterCourses: boolean; // Új tanfolyami regisztráció és szerződéskötés
+  canEditRegistrations: boolean; // Szerződések módosítása/törlése
+  canPrintContracts: boolean; // Szerződés nyomtatás és PDF export
+  // Járművek és flotta
+  canCheckoutVehicles: boolean; // Jármű kiadás és visszavétel oktatóknak
+  canEditVehicles: boolean; // Jármű felvétele, szerkesztése, kivonása/üzembehelyezése
+  canManageMaintenance: boolean; // Szerviz- és műszaki vizsga bejegyzések kezelése
+  // Órarend és oktatás
+  canManageLessons: boolean; // Órák beosztása, szerkesztése, lemondása
+  canOverrideScheduleConflicts: boolean; // Órarendi ütközések felülbírálása
+  // Tanulók és oktatók
+  canManageStudents: boolean; // Tanulók felvétele, szerkesztése, törlése
+  canManageInstructors: boolean; // Oktatók adatainak kezelése
+  // Pénzügy és üzemanyag
+  canManageFuel: boolean; // Tankolási bizonylatok rögzítése, törlése
+  // Beállítások és cégadatok
+  canEditCompanyInfo: boolean; // Cégadatok és szerződés záradék szerkesztése
+  canExportImportExcel: boolean; // Excel import/export végrehajtása
+  canManageUsers: boolean; // Felhasználók és jogosultságok kezelése (Csak admin)
+  canViewAuditLogs: boolean; // Tevékenységnapló (Audit log) megtekintése
+}
+
+export interface AppUser {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  passwordHash: string; // Egyszerűsített sha/b64 jelszó vagy tiszta jelszó offline környezetben
+  active: boolean;
+  avatarColor: string;
+  createdAt: string;
+  lastLoginAt?: string;
+  permissions: UserPermissions;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string; // ISO string
+  userId: string;
+  username: string;
+  userRole: UserRole;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'CHECKOUT' | 'CHECKIN' | 'SIGN' | 'IMPORT' | 'EXPORT';
+  module: 'AUTH' | 'USERS' | 'REGISTRATION' | 'VEHICLES' | 'SCHEDULE' | 'STUDENTS' | 'INSTRUCTORS' | 'FUEL' | 'MAINTENANCE' | 'COMPANY';
+  targetId?: string;
+  targetName?: string;
+  details: string; // Részletes leírás, mit módosítottak
+  ipOrDevice?: string;
+}
+
+export type DesignTemplateId = 'amber-classic' | 'emerald-modern' | 'blue-corporate' | 'violet-executive' | 'slate-minimal' | 'crimson-speed';
+
+export interface DesignTemplate {
+  id: DesignTemplateId;
+  name: string;
+  description: string;
+  primaryColor: string;
+  accentBadge: string;
+  previewBg: string;
+}
+
 export interface DatabaseState {
   vehicles: Vehicle[];
   instructors: Instructor[];
@@ -230,6 +295,9 @@ export interface DatabaseState {
   schoolCompany: SchoolCompanyInfo;
   courseOffers: CourseOffer[];
   courseRegistrations: CourseRegistration[];
+  users: AppUser[];
+  auditLogs: AuditLogEntry[];
+  currentTheme: DesignTemplateId;
   isEncrypted: boolean;
   encryptionPasswordHash?: string;
   lastSaved: string;

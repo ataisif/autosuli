@@ -9,6 +9,9 @@ import {
   MaintenanceRecord,
   CourseRegistration,
   SchoolCompanyInfo,
+  AppUser,
+  AuditLogEntry,
+  DesignTemplateId,
 } from './types';
 import { loadLocalDatabase, saveLocalDatabase } from './services/cryptoDb';
 import { initialDatabase } from './services/mockData';
@@ -18,6 +21,7 @@ import {
   requestDesktopNotificationPermission,
 } from './services/notificationService';
 import { exportFullDatabaseToExcel } from './services/excelService';
+import { THEME_TEMPLATES } from './services/themeService';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { CourseRegistrationView } from './components/CourseRegistrationView';
@@ -25,10 +29,13 @@ import { VehiclesView } from './components/VehiclesView';
 import { ScheduleView } from './components/ScheduleView';
 import { InstructorsStudentsView } from './components/InstructorsStudentsView';
 import { FuelView } from './components/FuelView';
+import { UsersManagementView } from './components/UsersManagementView';
+import { LoginScreen } from './components/LoginScreen';
+import { ThemeSwitcherModal } from './components/ThemeSwitcherModal';
 import { EmailModal } from './components/EmailModal';
 import { SettingsBackupModal } from './components/SettingsBackupModal';
 import { CompanySettingsModal } from './components/CompanySettingsModal';
-import { Keyboard, X } from 'lucide-react';
+import { Keyboard, X, ShieldAlert } from 'lucide-react';
 
 export default function App() {
   const [dbState, setDbState] = useState<DatabaseState>(initialDatabase);
@@ -42,9 +49,28 @@ export default function App() {
     return localStorage.getItem('autosuli_dark_mode') === 'true';
   });
 
+  // BEJELENTKEZETT FELHASZNÁLÓ ÁLLAPOT
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    const saved = localStorage.getItem('autosuli_logged_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  // TÉMA / DIZÁJN SABLON ÁLLAPOT
+  const [currentTheme, setCurrentTheme] = useState<DesignTemplateId>(() => {
+    return (localStorage.getItem('autosuli_theme') as DesignTemplateId) || 'amber-classic';
+  });
+
   // Modálok
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const [emailModal, setEmailModal] = useState<{
     isOpen: boolean;
@@ -65,6 +91,9 @@ export default function App() {
       const loaded = await loadLocalDatabase(storedKey || undefined);
       if (loaded) {
         setDbState(loaded);
+        if (loaded.currentTheme) {
+          setCurrentTheme(loaded.currentTheme);
+        }
       }
     }
     initDb();
@@ -81,6 +110,49 @@ export default function App() {
     }
   }, [isDarkMode]);
 
+  // Téma mentése
+  const handleSelectTheme = (themeId: DesignTemplateId) => {
+    setCurrentTheme(themeId);
+    localStorage.setItem('autosuli_theme', themeId);
+    handleUpdateDb({
+      ...dbState,
+      currentTheme: themeId,
+    });
+  };
+
+  // AUDIT LOG Segédfüggvény - Minden adatmódosítás naplózása
+  const logAudit = useCallback(
+    (
+      action: AuditLogEntry['action'],
+      module: AuditLogEntry['module'],
+      details: string,
+      targetId?: string,
+      targetName?: string
+    ) => {
+      const newEntry: AuditLogEntry = {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        userId: currentUser?.id || 'system',
+        username: currentUser?.username || 'Rendszer',
+        userRole: currentUser?.role || 'admin',
+        action,
+        module,
+        targetId,
+        targetName,
+        details,
+      };
+
+      setDbState((prev) => {
+        const updatedLogs = [newEntry, ...(prev.auditLogs || [])];
+        const nextState = { ...prev, auditLogs: updatedLogs };
+        // Aszinkron háttérmentés
+        saveLocalDatabase(nextState, encryptionKey || undefined);
+        return nextState;
+      });
+    },
+    [currentUser, encryptionKey]
+  );
+
   // Adatbázis automatikus mentése helyi tárolóba
   const handleUpdateDb = useCallback(
     async (newState: DatabaseState) => {
@@ -94,6 +166,32 @@ export default function App() {
     },
     [encryptionKey]
   );
+
+  // BEJELENTKEZÉS ÉS KIJELENTKEZÉS
+  const handleLogin = (user: AppUser) => {
+    const updatedUser = {
+      ...user,
+      lastLoginAt: new Date().toISOString(),
+    };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('autosuli_logged_user', JSON.stringify(updatedUser));
+
+    // Felhasználó utolsó belépésének frissítése a db-ben
+    const updatedUsers = dbState.users.map((u) => (u.id === user.id ? updatedUser : u));
+    const nextState = { ...dbState, users: updatedUsers };
+    handleUpdateDb(nextState);
+
+    // Belépés audit log
+    logAudit('LOGIN', 'AUTH', `Felhasználó sikeresen bejelentkezett (${user.fullName}, szerepkör: ${user.role})`);
+  };
+
+  const handleLogout = () => {
+    if (currentUser) {
+      logAudit('LOGOUT', 'AUTH', `Felhasználó kijelentkezett (${currentUser.fullName})`);
+    }
+    setCurrentUser(null);
+    localStorage.removeItem('autosuli_logged_user');
+  };
 
   // Riasztások és határidők számítása
   const systemAlerts = useMemo(() => {
@@ -129,7 +227,7 @@ export default function App() {
     }
   };
 
-  // Gyorsbillentyűk (Alt + 1..6, Alt + S, ?)
+  // Gyorsbillentyűk (Alt + 1..7, Alt + S, ?)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey) {
@@ -151,6 +249,9 @@ export default function App() {
         } else if (e.key === '6') {
           e.preventDefault();
           setActiveTab('fuel');
+        } else if (e.key === '7') {
+          e.preventDefault();
+          setActiveTab('users');
         } else if (e.key === 's' || e.key === 'S') {
           e.preventDefault();
           setSettingsModalOpen(true);
@@ -168,13 +269,42 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // TANFOLYAM REGISZTRÁCIÓ & SZERZŐDÉS MŰVELETEK (Dinamikus adatcserével)
+  // FELHASZNÁLÓKEZELÉS MŰVELETEK (Admin)
+  const handleAddUser = (user: AppUser) => {
+    handleUpdateDb({
+      ...dbState,
+      users: [...dbState.users, user],
+    });
+    logAudit('CREATE', 'USERS', `Új felhasználó regisztrálva: ${user.fullName} (@${user.username}, szerepkör: ${user.role})`, user.id, user.fullName);
+  };
+
+  const handleUpdateUser = (user: AppUser) => {
+    handleUpdateDb({
+      ...dbState,
+      users: dbState.users.map((u) => (u.id === user.id ? user : u)),
+    });
+    if (currentUser?.id === user.id) {
+      setCurrentUser(user);
+      localStorage.setItem('autosuli_logged_user', JSON.stringify(user));
+    }
+    logAudit('UPDATE', 'USERS', `Felhasználó adatai és jogosultságai módosítva: ${user.fullName} (@${user.username})`, user.id, user.fullName);
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    const target = dbState.users.find((u) => u.id === userId);
+    handleUpdateDb({
+      ...dbState,
+      users: dbState.users.filter((u) => u.id !== userId),
+    });
+    logAudit('DELETE', 'USERS', `Felhasználó törölve a rendszerből: ${target?.fullName || userId}`, userId, target?.fullName);
+  };
+
+  // TANFOLYAM REGISZTRÁCIÓ & SZERZŐDÉS MŰVELETEK (Dinamikus adatcserével & Audit)
   const handleAddRegistration = (registration: CourseRegistration, autoCreateStudent: boolean) => {
     let updatedStudents = [...dbState.students];
     let createdStudentId = registration.studentId;
 
     if (autoCreateStudent) {
-      // Megnézzük, hogy létezik-e már a tanuló név vagy email alapján
       const existingIndex = updatedStudents.findIndex(
         (s) =>
           s.email.toLowerCase() === registration.email.toLowerCase() ||
@@ -186,7 +316,6 @@ export default function App() {
       const reqKm = targetCourse ? targetCourse.requiredKm : 580;
 
       if (existingIndex >= 0) {
-        // Frissítjük a meglévő tanulót az új tanfolyami adatokkal
         const existing = updatedStudents[existingIndex];
         createdStudentId = existing.id;
         updatedStudents[existingIndex] = {
@@ -200,7 +329,6 @@ export default function App() {
             : existing.notes,
         };
       } else {
-        // Új tanuló létrehozása a törzsben
         createdStudentId = `stud-${Date.now()}`;
         const newStudent: Student = {
           id: createdStudentId,
@@ -238,6 +366,14 @@ export default function App() {
       courseRegistrations: [regWithId, ...dbState.courseRegistrations],
       students: updatedStudents,
     });
+
+    logAudit(
+      'CREATE',
+      'REGISTRATION',
+      `Új képzési szerződés rögzítve (${registration.contractNumber}, ${registration.studentName}, ${registration.category} kat, előleg: ${registration.initialDeposit.toLocaleString('hu-HU')} Ft)`,
+      regWithId.id,
+      registration.studentName
+    );
   };
 
   const handleUpdateRegistration = (reg: CourseRegistration) => {
@@ -245,6 +381,7 @@ export default function App() {
       ...dbState,
       courseRegistrations: dbState.courseRegistrations.map((r) => (r.id === reg.id ? reg : r)),
     });
+    logAudit('UPDATE', 'REGISTRATION', `Szerződés adatainak frissítése (${reg.contractNumber})`, reg.id, reg.studentName);
   };
 
   const handleUpdateCompanyInfo = (info: SchoolCompanyInfo) => {
@@ -252,6 +389,7 @@ export default function App() {
       ...dbState,
       schoolCompany: info,
     });
+    logAudit('UPDATE', 'COMPANY', `Autósiskola cégadatainak és bankszámlaszámának frissítése (${info.companyName})`);
   };
 
   // JÁRMŰ MŰVELETEK
@@ -260,6 +398,7 @@ export default function App() {
       ...dbState,
       vehicles: [...dbState.vehicles, vehicle],
     });
+    logAudit('CREATE', 'VEHICLES', `Új jármű felvéve a flottába: ${vehicle.plateNumber} (${vehicle.brandModel})`, vehicle.id, vehicle.plateNumber);
   };
 
   const handleUpdateVehicle = (vehicle: Vehicle) => {
@@ -267,16 +406,22 @@ export default function App() {
       ...dbState,
       vehicles: dbState.vehicles.map((v) => (v.id === vehicle.id ? vehicle : v)),
     });
+    logAudit('UPDATE', 'VEHICLES', `Jármű adatai módosítva: ${vehicle.plateNumber} (${vehicle.brandModel}, állapot: ${vehicle.status})`, vehicle.id, vehicle.plateNumber);
   };
 
   const handleDeleteVehicle = (id: string) => {
+    const target = dbState.vehicles.find((v) => v.id === id);
     handleUpdateDb({
       ...dbState,
       vehicles: dbState.vehicles.filter((v) => v.id !== id),
     });
+    logAudit('DELETE', 'VEHICLES', `Jármű törölve a nyilvántartásból: ${target?.plateNumber || id}`, id, target?.plateNumber);
   };
 
   const handleCheckoutVehicle = (vehicleId: string, instructorId: string, startKm: number, notes?: string) => {
+    const veh = dbState.vehicles.find((v) => v.id === vehicleId);
+    const inst = dbState.instructors.find((i) => i.id === instructorId);
+
     handleUpdateDb({
       ...dbState,
       vehicles: dbState.vehicles.map((v) =>
@@ -292,9 +437,19 @@ export default function App() {
           : v
       ),
     });
+
+    logAudit(
+      'CHECKOUT',
+      'VEHICLES',
+      `Jármű kiadva oktatásra: ${veh?.plateNumber} -> ${inst?.name || instructorId} (Kezdő km: ${startKm})`,
+      vehicleId,
+      veh?.plateNumber
+    );
   };
 
   const handleCheckinVehicle = (vehicleId: string, endKm: number, notes?: string) => {
+    const veh = dbState.vehicles.find((v) => v.id === vehicleId);
+
     handleUpdateDb({
       ...dbState,
       vehicles: dbState.vehicles.map((v) =>
@@ -310,21 +465,48 @@ export default function App() {
           : v
       ),
     });
+
+    logAudit(
+      'CHECKIN',
+      'VEHICLES',
+      `Jármű visszavéve oktatásból: ${veh?.plateNumber} (Leadási km: ${endKm})`,
+      vehicleId,
+      veh?.plateNumber
+    );
   };
 
   const handleAddMaintenance = (maintenanceRecord: MaintenanceRecord) => {
+    const veh = dbState.vehicles.find((v) => v.id === maintenanceRecord.vehicleId);
     handleUpdateDb({
       ...dbState,
       maintenance: [...dbState.maintenance, maintenanceRecord],
     });
+    logAudit(
+      'CREATE',
+      'MAINTENANCE',
+      `Szervizbejegyzés rögzítve: ${veh?.plateNumber} - ${maintenanceRecord.type} (${maintenanceRecord.cost.toLocaleString('hu-HU')} Ft, ${maintenanceRecord.workshop})`,
+      maintenanceRecord.id,
+      veh?.plateNumber
+    );
   };
 
   // ÓRAREND MŰVELETEK
   const handleAddLesson = (lesson: Lesson) => {
+    const stud = dbState.students.find((s) => s.id === lesson.studentId);
+    const inst = dbState.instructors.find((i) => i.id === lesson.instructorId);
+
     handleUpdateDb({
       ...dbState,
       lessons: [...dbState.lessons, lesson],
     });
+
+    logAudit(
+      'CREATE',
+      'SCHEDULE',
+      `Új vezetési óra beütemezve: ${lesson.date} ${lesson.startTime}-${lesson.endTime} (${stud?.name || 'Tanuló'} • ${inst?.name || 'Oktató'})`,
+      lesson.id,
+      stud?.name
+    );
   };
 
   const handleUpdateLesson = (lesson: Lesson) => {
@@ -332,13 +514,16 @@ export default function App() {
       ...dbState,
       lessons: dbState.lessons.map((l) => (l.id === lesson.id ? lesson : l)),
     });
+    logAudit('UPDATE', 'SCHEDULE', `Vezetési óra módosítva: ${lesson.date} (${lesson.status})`, lesson.id);
   };
 
   const handleDeleteLesson = (id: string) => {
+    const target = dbState.lessons.find((l) => l.id === id);
     handleUpdateDb({
       ...dbState,
       lessons: dbState.lessons.filter((l) => l.id !== id),
     });
+    logAudit('DELETE', 'SCHEDULE', `Vezetési óra törölve: ${target?.date} ${target?.startTime}`, id);
   };
 
   // TANULÓ ÉS OKTATÓ MŰVELETEK
@@ -347,6 +532,7 @@ export default function App() {
       ...dbState,
       students: [...dbState.students, student],
     });
+    logAudit('CREATE', 'STUDENTS', `Új tanuló felvéve: ${student.name} (${student.category} kategória)`, student.id, student.name);
   };
 
   const handleUpdateStudent = (student: Student) => {
@@ -354,13 +540,16 @@ export default function App() {
       ...dbState,
       students: dbState.students.map((s) => (s.id === student.id ? student : s)),
     });
+    logAudit('UPDATE', 'STUDENTS', `Tanulói adatok módosítva: ${student.name} (${student.completedHours} levezetett óra)`, student.id, student.name);
   };
 
   const handleDeleteStudent = (id: string) => {
+    const target = dbState.students.find((s) => s.id === id);
     handleUpdateDb({
       ...dbState,
       students: dbState.students.filter((s) => s.id !== id),
     });
+    logAudit('DELETE', 'STUDENTS', `Tanuló törölve: ${target?.name || id}`, id, target?.name);
   };
 
   const handleAddInstructor = (instructor: Instructor) => {
@@ -368,6 +557,7 @@ export default function App() {
       ...dbState,
       instructors: [...dbState.instructors, instructor],
     });
+    logAudit('CREATE', 'INSTRUCTORS', `Új oktató rögzítve: ${instructor.name} (${instructor.licenseNumber})`, instructor.id, instructor.name);
   };
 
   const handleUpdateInstructor = (instructor: Instructor) => {
@@ -375,17 +565,21 @@ export default function App() {
       ...dbState,
       instructors: dbState.instructors.map((i) => (i.id === instructor.id ? instructor : i)),
     });
+    logAudit('UPDATE', 'INSTRUCTORS', `Oktató adatai frissítve: ${instructor.name}`, instructor.id, instructor.name);
   };
 
   const handleDeleteInstructor = (id: string) => {
+    const target = dbState.instructors.find((i) => i.id === id);
     handleUpdateDb({
       ...dbState,
       instructors: dbState.instructors.filter((i) => i.id !== id),
     });
+    logAudit('DELETE', 'INSTRUCTORS', `Oktató törölve: ${target?.name || id}`, id, target?.name);
   };
 
   // TANKOLÁS MŰVELETEK
   const handleAddFuelLog = (log: FuelLog) => {
+    const veh = dbState.vehicles.find((v) => v.id === log.vehicleId);
     handleUpdateDb({
       ...dbState,
       fuelLogs: [...dbState.fuelLogs, log],
@@ -395,6 +589,13 @@ export default function App() {
           : v
       ),
     });
+    logAudit(
+      'CREATE',
+      'FUEL',
+      `Tankolás rögzítve: ${veh?.plateNumber} (${log.liters} l, ${log.totalCost.toLocaleString('hu-HU')} Ft, ${log.currentKm} km)`,
+      log.id,
+      veh?.plateNumber
+    );
   };
 
   const handleDeleteFuelLog = (id: string) => {
@@ -402,6 +603,7 @@ export default function App() {
       ...dbState,
       fuelLogs: dbState.fuelLogs.filter((f) => f.id !== id),
     });
+    logAudit('DELETE', 'FUEL', `Tankolási bizonylat törölve`, id);
   };
 
   // Titkosítási kulcs mentése
@@ -413,6 +615,7 @@ export default function App() {
       localStorage.removeItem('autosuli_enc_key');
     }
     await saveLocalDatabase(dbState, newKey || undefined);
+    logAudit('UPDATE', 'COMPANY', newKey ? 'Adatbázis jelszavas AES-GCM titkosítása aktiválva' : 'Adatbázis titkosítás kikapcsolva');
   };
 
   // Email sablon megnyitó segéd
@@ -423,6 +626,20 @@ export default function App() {
       data,
     });
   };
+
+  // 1. HA NINCS BEJELENTKEZVE: BEJELENTKEZŐ KÉPERNYŐ MEGJELENÍTÉSE
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        users={dbState.users}
+        onLogin={handleLogin}
+        schoolName={dbState.schoolCompany.schoolName}
+      />
+    );
+  }
+
+  // Jogosultságok lekérése a bejelentkezett felhasználótól
+  const perms = currentUser.permissions;
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
@@ -436,16 +653,21 @@ export default function App() {
         isSaving={isSaving}
         onOpenDbModal={() => setSettingsModalOpen(true)}
         onOpenCompanyModal={() => setCompanyModalOpen(true)}
+        onOpenThemeModal={() => setThemeModalOpen(true)}
         onOpenShortcutsModal={() => setShortcutsModalOpen(true)}
         onOpenEmailModal={() => handleOpenEmailTemplate('mot', dbState.vehicles[0])}
         onPrintSchedule={() => window.print()}
         onRequestNotifications={handleRequestNotifications}
         notificationsEnabled={notificationsEnabled}
         urgentCount={urgentCount}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        currentTheme={currentTheme}
       />
 
       {/* Fő Tartalmi Terület */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+        {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <DashboardView
             dbState={dbState}
@@ -458,17 +680,27 @@ export default function App() {
           />
         )}
 
+        {/* TANFOLYAM REGISZTRÁCIÓ TAB */}
         {activeTab === 'registration' && (
-          <CourseRegistrationView
-            dbState={dbState}
-            onAddRegistration={handleAddRegistration}
-            onUpdateRegistration={handleUpdateRegistration}
-            onUpdateCompanyInfo={handleUpdateCompanyInfo}
-            onOpenEmailModal={(type, reg) => handleOpenEmailTemplate(type, reg)}
-            onNavigateToStudents={() => setActiveTab('people')}
-          />
+          perms.canRegisterCourses ? (
+            <CourseRegistrationView
+              dbState={dbState}
+              onAddRegistration={handleAddRegistration}
+              onUpdateRegistration={handleUpdateRegistration}
+              onUpdateCompanyInfo={handleUpdateCompanyInfo}
+              onOpenEmailModal={(type, reg) => handleOpenEmailTemplate(type, reg)}
+              onNavigateToStudents={() => setActiveTab('people')}
+            />
+          ) : (
+            <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-2" />
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Hozzáférés Korlátozva</h3>
+              <p className="text-xs text-slate-500 mt-1">Az Ön felhasználói profilja számára a tanfolyam regisztrációs modul nem engedélyezett.</p>
+            </div>
+          )
         )}
 
+        {/* GÉPJÁRMŰ FLOTTA TAB */}
         {activeTab === 'vehicles' && (
           <VehiclesView
             dbState={dbState}
@@ -482,16 +714,26 @@ export default function App() {
           />
         )}
 
+        {/* ÓRAREND TAB */}
         {activeTab === 'schedule' && (
-          <ScheduleView
-            dbState={dbState}
-            onAddLesson={handleAddLesson}
-            onUpdateLesson={handleUpdateLesson}
-            onDeleteLesson={handleDeleteLesson}
-            onPrint={() => window.print()}
-          />
+          perms.canManageLessons ? (
+            <ScheduleView
+              dbState={dbState}
+              onAddLesson={handleAddLesson}
+              onUpdateLesson={handleUpdateLesson}
+              onDeleteLesson={handleDeleteLesson}
+              onPrint={() => window.print()}
+            />
+          ) : (
+            <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-2" />
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Hozzáférés Korlátozva</h3>
+              <p className="text-xs text-slate-500 mt-1">Az Ön felhasználói profilja nem jogosult az órarendi beosztások szerkesztésére.</p>
+            </div>
+          )
         )}
 
+        {/* OKTATÓK & TANULÓK TAB */}
         {activeTab === 'people' && (
           <InstructorsStudentsView
             dbState={dbState}
@@ -505,28 +747,64 @@ export default function App() {
           />
         )}
 
+        {/* TANKOLÁSOK TAB */}
         {activeTab === 'fuel' && (
-          <FuelView
-            dbState={dbState}
-            onAddFuelLog={handleAddFuelLog}
-            onDeleteFuelLog={handleDeleteFuelLog}
-          />
+          perms.canManageFuel ? (
+            <FuelView
+              dbState={dbState}
+              onAddFuelLog={handleAddFuelLog}
+              onDeleteFuelLog={handleDeleteFuelLog}
+            />
+          ) : (
+            <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-2" />
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Hozzáférés Korlátozva</h3>
+              <p className="text-xs text-slate-500 mt-1">Az Ön felhasználói profilja számára a tankolások kezelése le van tiltva.</p>
+            </div>
+          )
+        )}
+
+        {/* FELHASZNÁLÓK & AUDIT NAPLÓ TAB (Csak jogosultaknak) */}
+        {activeTab === 'users' && (
+          (currentUser.role === 'admin' || perms.canManageUsers || perms.canViewAuditLogs) ? (
+            <UsersManagementView
+              currentUser={currentUser}
+              users={dbState.users}
+              auditLogs={dbState.auditLogs || []}
+              onAddUser={handleAddUser}
+              onUpdateUser={handleUpdateUser}
+              onDeleteUser={handleDeleteUser}
+            />
+          ) : (
+            <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-2" />
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">Adminisztrátori Hozzáférés Szükséges</h3>
+              <p className="text-xs text-slate-500 mt-1">A felhasználók és a tevékenységnapló (Audit) megtekintése kizárólag rendszergazdáknak engedélyezett.</p>
+            </div>
+          )
         )}
       </main>
 
       {/* Lábléc Információk & Gyorsbillentyű gomb */}
-      <footer className="no-print border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 py-3 px-6 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div className="flex items-center space-x-2">
-          <span className="font-semibold text-slate-700 dark:text-slate-300">AutoSuli Flotta & Admin v2.5</span>
+      <footer className="no-print border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 py-3 px-4 sm:px-6 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2">
+          <span className="font-semibold text-slate-700 dark:text-slate-300">AutoSuli Flotta & Admin v2.6</span>
           <span>•</span>
           <span className="font-medium text-amber-600 dark:text-amber-400">
             {dbState.schoolCompany.schoolName}
           </span>
-          <span>•</span>
-          <span>Érintőképernyős Aláíró & Szerződéskezelő</span>
+          <span className="hidden md:inline">•</span>
+          <span className="hidden md:inline">Bejelentkezve: {currentUser.fullName} ({currentUser.role === 'admin' ? 'Adminisztrátor' : 'Ügyviteli dolgozó'})</span>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <button
+            onClick={() => setThemeModalOpen(true)}
+            className="hover:text-amber-600 transition-colors"
+          >
+            Dizájn Sablonok
+          </button>
+          <span>•</span>
           <button
             onClick={() => setCompanyModalOpen(true)}
             className="hover:text-amber-600 transition-colors"
@@ -539,14 +817,8 @@ export default function App() {
             className="flex items-center space-x-1 hover:text-amber-600 transition-colors"
           >
             <Keyboard className="w-3.5 h-3.5" />
-            <span>Gyorsbillentyűk (Alt+1..6, ?)</span>
-          </button>
-          <span>•</span>
-          <button
-            onClick={() => setSettingsModalOpen(true)}
-            className="hover:text-amber-600 transition-colors"
-          >
-            Adatbázis & Mentések
+            <span className="hidden sm:inline">Gyorsbillentyűk (Alt+1..7, ?)</span>
+            <span className="sm:hidden">Súgó</span>
           </button>
         </div>
       </footer>
@@ -565,7 +837,10 @@ export default function App() {
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
         dbState={dbState}
-        onReplaceDbState={(newState) => handleUpdateDb(newState)}
+        onReplaceDbState={(newState) => {
+          handleUpdateDb(newState);
+          logAudit('IMPORT', 'USERS', 'Teljes adatbázis csere vagy visszaállítás végrehajtva');
+        }}
         encryptionKey={encryptionKey}
         onSetEncryptionKey={handleSetEncryptionKey}
         onTriggerAlertsCheck={triggerAlertsCheck}
@@ -577,6 +852,16 @@ export default function App() {
         onClose={() => setCompanyModalOpen(false)}
         companyInfo={dbState.schoolCompany}
         onSaveCompanyInfo={handleUpdateCompanyInfo}
+      />
+
+      {/* DIZÁJN SABLONOK MODÁL */}
+      <ThemeSwitcherModal
+        isOpen={themeModalOpen}
+        onClose={() => setThemeModalOpen(false)}
+        currentTheme={currentTheme}
+        onSelectTheme={handleSelectTheme}
+        darkMode={isDarkMode}
+        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
       />
 
       {/* GYORSBILLENTYŰK SÚGÓ MODÁL */}
@@ -622,6 +907,10 @@ export default function App() {
               <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span>Tankolások & Fogyasztás</span>
                 <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono font-bold">Alt + 6</kbd>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                <span>Felhasználók & Audit</span>
+                <kbd className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono font-bold">Alt + 7</kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800">
                 <span>Beállítások & Mentések</span>
