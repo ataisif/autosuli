@@ -1,4 +1,16 @@
-export type VehicleCategory = 'A' | 'B' | 'C' | 'CE' | 'D';
+export type VehicleCategory =
+  | 'AM'
+  | 'A1'
+  | 'A2'
+  | 'A'
+  | 'B'
+  | 'BE'
+  | 'C'
+  | 'CE'
+  | 'D'
+  | 'DE'
+  | 'T'
+  | string;
 
 export type VehicleStatus = 'active' | 'in_use' | 'service' | 'deregistered';
 
@@ -274,6 +286,13 @@ export interface AuditLogEntry {
 
 export type DesignTemplateId = 'amber-classic' | 'emerald-modern' | 'blue-corporate' | 'violet-executive' | 'slate-minimal' | 'crimson-speed';
 
+export interface AppLogoConfig {
+  type: 'icon' | 'image';
+  iconName?: string; // pl. 'car', 'steering-wheel', 'shield', 'graduation-cap', 'truck', 'award', 'compass', 'zap', 'gauge'
+  imageUrl?: string; // Base64 data URL vagy kép URL
+  uploadedFileName?: string;
+}
+
 export interface DesignTemplate {
   id: DesignTemplateId;
   name: string;
@@ -298,6 +317,7 @@ export interface DatabaseState {
   users: AppUser[];
   auditLogs: AuditLogEntry[];
   currentTheme: DesignTemplateId;
+  appLogo?: AppLogoConfig;
   isEncrypted: boolean;
   encryptionPasswordHash?: string;
   lastSaved: string;

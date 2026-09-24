@@ -24,6 +24,7 @@ import {
   FileSignature,
   Building,
   Check,
+  Briefcase,
 } from 'lucide-react';
 import { AppUser, UserPermissions, AuditLogEntry, UserRole } from '../types';
 

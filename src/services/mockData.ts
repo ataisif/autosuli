@@ -588,6 +588,10 @@ export const initialDatabase: DatabaseState = {
     },
   ],
   currentTheme: 'amber-classic',
+  appLogo: {
+    type: 'icon',
+    iconName: 'car',
+  },
   isEncrypted: false,
   lastSaved: new Date().toISOString(),
 };

@@ -12,6 +12,8 @@ import {
   AppUser,
   AuditLogEntry,
   DesignTemplateId,
+  AppLogoConfig,
+  CourseOffer,
 } from './types';
 import { loadLocalDatabase, saveLocalDatabase } from './services/cryptoDb';
 import { initialDatabase } from './services/mockData';
@@ -21,7 +23,7 @@ import {
   requestDesktopNotificationPermission,
 } from './services/notificationService';
 import { exportFullDatabaseToExcel } from './services/excelService';
-import { THEME_TEMPLATES } from './services/themeService';
+import { THEME_TEMPLATES, applyThemeToDom } from './services/themeService';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { CourseRegistrationView } from './components/CourseRegistrationView';
@@ -32,6 +34,7 @@ import { FuelView } from './components/FuelView';
 import { UsersManagementView } from './components/UsersManagementView';
 import { LoginScreen } from './components/LoginScreen';
 import { ThemeSwitcherModal } from './components/ThemeSwitcherModal';
+import { LogoCustomizerModal } from './components/LogoCustomizerModal';
 import { EmailModal } from './components/EmailModal';
 import { SettingsBackupModal } from './components/SettingsBackupModal';
 import { CompanySettingsModal } from './components/CompanySettingsModal';
@@ -71,6 +74,7 @@ export default function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [logoModalOpen, setLogoModalOpen] = useState(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const [emailModal, setEmailModal] = useState<{
     isOpen: boolean;
@@ -93,11 +97,20 @@ export default function App() {
         setDbState(loaded);
         if (loaded.currentTheme) {
           setCurrentTheme(loaded.currentTheme);
+          applyThemeToDom(loaded.currentTheme);
         }
+      } else {
+        const savedTheme = (localStorage.getItem('autosuli_theme') as DesignTemplateId) || 'amber-classic';
+        applyThemeToDom(savedTheme);
       }
     }
     initDb();
   }, []);
+
+  // Téma érvényesítése a teljes webalkalmazásban
+  useEffect(() => {
+    applyThemeToDom(currentTheme);
+  }, [currentTheme]);
 
   // Dark mode szinkronizálása
   useEffect(() => {
@@ -113,6 +126,7 @@ export default function App() {
   // Téma mentése
   const handleSelectTheme = (themeId: DesignTemplateId) => {
     setCurrentTheme(themeId);
+    applyThemeToDom(themeId);
     localStorage.setItem('autosuli_theme', themeId);
     handleUpdateDb({
       ...dbState,
@@ -606,6 +620,90 @@ export default function App() {
     logAudit('DELETE', 'FUEL', `Tankolási bizonylat törölve`, id);
   };
 
+  // LOGÓ MÓDOSÍTÁS KEZELÉSE
+  const handleSaveLogo = (logo: AppLogoConfig) => {
+    const updatedCompany: SchoolCompanyInfo = {
+      ...dbState.schoolCompany,
+      ...(logo.type === 'image' && logo.imageUrl ? { logoUrl: logo.imageUrl } : {}),
+    };
+
+    const newState: DatabaseState = {
+      ...dbState,
+      appLogo: logo,
+      schoolCompany: updatedCompany,
+    };
+
+    handleUpdateDb(newState);
+    logAudit(
+      'UPDATE',
+      'COMPANY',
+      logo.type === 'image'
+        ? `Új egyedi kép alapú applikáció logó beállítva (${logo.uploadedFileName || 'kép'}).`
+        : `Applikáció ikon embléma módosítva: ${logo.iconName || 'car'}.`
+    );
+  };
+
+  // KÉPZÉSI KATEGÓRIÁK ÉS TANFOLYAMOK KEZELÉSE
+  const handleAddCourseOffer = (course: CourseOffer) => {
+    const newState: DatabaseState = {
+      ...dbState,
+      courseOffers: [...dbState.courseOffers, course],
+    };
+    handleUpdateDb(newState);
+    logAudit(
+      'CREATE',
+      'REGISTRATION',
+      `Új képzési kategória és tanfolyam rögzítve: ${course.name} (${course.category} kat., ${course.basePrice.toLocaleString('hu-HU')} Ft)`,
+      course.id,
+      course.name
+    );
+  };
+
+  const handleUpdateCourseOffer = (course: CourseOffer) => {
+    const newState: DatabaseState = {
+      ...dbState,
+      courseOffers: dbState.courseOffers.map((c) => (c.id === course.id ? course : c)),
+    };
+    handleUpdateDb(newState);
+    logAudit(
+      'UPDATE',
+      'REGISTRATION',
+      `Képzési tanfolyam módosítva: ${course.name} (${course.category} kat., ${course.basePrice.toLocaleString('hu-HU')} Ft)`,
+      course.id,
+      course.name
+    );
+  };
+
+  const handleDeleteCourseOffer = (courseId: string) => {
+    const target = dbState.courseOffers.find((c) => c.id === courseId);
+    const newState: DatabaseState = {
+      ...dbState,
+      courseOffers: dbState.courseOffers.filter((c) => c.id !== courseId),
+    };
+    handleUpdateDb(newState);
+    logAudit(
+      'DELETE',
+      'REGISTRATION',
+      `Képzési tanfolyam törölve: ${target?.name || courseId}`,
+      courseId,
+      target?.name
+    );
+  };
+
+  const handleResetCourseOffers = () => {
+    const defaultOffers = initialDatabase.courseOffers;
+    const newState: DatabaseState = {
+      ...dbState,
+      courseOffers: defaultOffers,
+    };
+    handleUpdateDb(newState);
+    logAudit(
+      'UPDATE',
+      'REGISTRATION',
+      `Gyári tanfolyamok és kategóriák visszaállítva (${defaultOffers.length} képzés).`
+    );
+  };
+
   // Titkosítási kulcs mentése
   const handleSetEncryptionKey = async (newKey: string | null) => {
     setEncryptionKey(newKey);
@@ -654,6 +752,7 @@ export default function App() {
         onOpenDbModal={() => setSettingsModalOpen(true)}
         onOpenCompanyModal={() => setCompanyModalOpen(true)}
         onOpenThemeModal={() => setThemeModalOpen(true)}
+        onOpenLogoModal={() => setLogoModalOpen(true)}
         onOpenShortcutsModal={() => setShortcutsModalOpen(true)}
         onOpenEmailModal={() => handleOpenEmailTemplate('mot', dbState.vehicles[0])}
         onPrintSchedule={() => window.print()}
@@ -690,6 +789,10 @@ export default function App() {
               onUpdateCompanyInfo={handleUpdateCompanyInfo}
               onOpenEmailModal={(type, reg) => handleOpenEmailTemplate(type, reg)}
               onNavigateToStudents={() => setActiveTab('people')}
+              onAddCourseOffer={handleAddCourseOffer}
+              onUpdateCourseOffer={handleUpdateCourseOffer}
+              onDeleteCourseOffer={handleDeleteCourseOffer}
+              onResetCourseOffers={handleResetCourseOffers}
             />
           ) : (
             <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -799,6 +902,13 @@ export default function App() {
 
         <div className="flex items-center space-x-2 sm:space-x-3">
           <button
+            onClick={() => setLogoModalOpen(true)}
+            className="hover:text-amber-600 transition-colors"
+          >
+            App Logó
+          </button>
+          <span>•</span>
+          <button
             onClick={() => setThemeModalOpen(true)}
             className="hover:text-amber-600 transition-colors"
           >
@@ -822,6 +932,16 @@ export default function App() {
           </button>
         </div>
       </footer>
+
+      {/* ALKALMAZÁS LOGÓ TESTRESZABÓ MODÁL */}
+      <LogoCustomizerModal
+        isOpen={logoModalOpen}
+        onClose={() => setLogoModalOpen(false)}
+        currentLogo={dbState.appLogo}
+        onSaveLogo={handleSaveLogo}
+        currentTheme={currentTheme}
+        schoolName={dbState.schoolCompany.schoolName}
+      />
 
       {/* EMAIL KÜLDŐ SABLON MODÁL */}
       <EmailModal

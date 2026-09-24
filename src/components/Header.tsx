@@ -22,6 +22,15 @@ import {
   Menu,
   X,
   ChevronDown,
+  Pencil,
+  Image as ImageIcon,
+  Bike,
+  Truck,
+  GraduationCap,
+  Award,
+  Compass,
+  Zap,
+  Gauge,
 } from 'lucide-react';
 import { DatabaseState, AppUser, DesignTemplateId } from '../types';
 import { THEME_TEMPLATES } from '../services/themeService';
@@ -38,6 +47,7 @@ interface HeaderProps {
   onOpenEmailModal: () => void;
   onOpenCompanyModal?: () => void;
   onOpenThemeModal?: () => void;
+  onOpenLogoModal?: () => void;
   onPrintSchedule: () => void;
   onRequestNotifications: () => void;
   notificationsEnabled: boolean;
@@ -59,6 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenEmailModal,
   onOpenCompanyModal,
   onOpenThemeModal,
+  onOpenLogoModal,
   onPrintSchedule,
   onRequestNotifications,
   notificationsEnabled,
@@ -74,6 +85,45 @@ export const Header: React.FC<HeaderProps> = ({
 
   const perms = currentUser?.permissions;
   const isAdmin = currentUser?.role === 'admin';
+
+  // Dinamikus logó renderelése (saját feltöltött kép vagy választott szimbólum)
+  const renderHeaderLogo = () => {
+    const appLogo = dbState.appLogo;
+    if (appLogo?.type === 'image' && appLogo?.imageUrl) {
+      return (
+        <img
+          src={appLogo.imageUrl}
+          alt="AutoSuli Logó"
+          className="w-full h-full object-contain p-0.5 rounded-lg"
+        />
+      );
+    }
+
+    const iconName = appLogo?.iconName || 'car';
+    switch (iconName) {
+      case 'bike':
+        return <Bike className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'truck':
+        return <Truck className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'graduation-cap':
+        return <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'shield':
+        return <Shield className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'award':
+        return <Award className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'compass':
+        return <Compass className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'zap':
+        return <Zap className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'gauge':
+        return <Gauge className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'building':
+        return <Building2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+      case 'car':
+      default:
+        return <Car className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />;
+    }
+  };
 
   // Dinamikus fülek a felhasználó jogosultságai alapján
   const allTabs = [
@@ -135,11 +185,17 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/60">
         {/* Bal oldal: Logó & Cím */}
         <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
-          <div
-            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr ${themeConfig.gradientHeader} flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0`}
+          <button
+            type="button"
+            onClick={onOpenLogoModal}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr ${themeConfig.gradientHeader} flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0 relative group cursor-pointer transition-transform hover:scale-105`}
+            title="App logó testreszabása / cseréje (Kattintson ide a módosításhoz)"
           >
-            <Car className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
-          </div>
+            {renderHeaderLogo()}
+            <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+              <Pencil className="w-3.5 h-3.5 text-white drop-shadow-sm" />
+            </div>
+          </button>
           <div className="min-w-0">
             <div className="flex items-center space-x-2">
               <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white truncate">
@@ -212,6 +268,19 @@ export const Header: React.FC<HeaderProps> = ({
                       <span>Felhasználók & Jogosultságok</span>
                     </button>
 
+                    {onOpenLogoModal && (
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenLogoModal();
+                        }}
+                        className="w-full px-3.5 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2 text-slate-700 dark:text-slate-300"
+                      >
+                        <ImageIcon className="w-4 h-4 text-amber-500" />
+                        <span>App Logó Cseréje</span>
+                      </button>
+                    )}
+
                     {onOpenThemeModal && (
                       <button
                         onClick={() => {
@@ -241,6 +310,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
             </div>
+          )}
+
+          {/* App Logó Testreszabás gomb */}
+          {onOpenLogoModal && (
+            <button
+              onClick={onOpenLogoModal}
+              className="p-1.5 sm:px-2 sm:py-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 flex items-center space-x-1 transition-colors cursor-pointer"
+              title="Alkalmazás logó és embléma testreszabása"
+            >
+              <ImageIcon className="w-4 h-4 text-amber-500" />
+              <span className="hidden md:inline text-xs font-medium">Logó</span>
+            </button>
           )}
 
           {/* Dizájn Sablon gomb */}

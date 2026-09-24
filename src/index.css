@@ -1,12 +1,217 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --theme-primary: #d97706;
+    --theme-primary-hover: #b45309;
+    --theme-primary-light: rgba(217, 119, 6, 0.12);
+    --theme-primary-border: #f59e0b;
+    --theme-primary-text: #d97706;
+    --theme-gradient-header: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    --theme-tag-color: #d97706;
+    --theme-shadow: rgba(217, 119, 6, 0.25);
+    --theme-ring: rgba(217, 119, 6, 0.4);
+  }
+
+  [data-theme='amber-classic'] {
+    --theme-primary: #d97706;
+    --theme-primary-hover: #b45309;
+    --theme-primary-light: rgba(217, 119, 6, 0.12);
+    --theme-primary-border: #f59e0b;
+    --theme-primary-text: #d97706;
+    --theme-gradient-header: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    --theme-tag-color: #d97706;
+    --theme-shadow: rgba(217, 119, 6, 0.25);
+    --theme-ring: rgba(217, 119, 6, 0.4);
+  }
+
+  [data-theme='emerald-modern'] {
+    --theme-primary: #059669;
+    --theme-primary-hover: #047857;
+    --theme-primary-light: rgba(5, 150, 105, 0.14);
+    --theme-primary-border: #10b981;
+    --theme-primary-text: #059669;
+    --theme-gradient-header: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+    --theme-tag-color: #059669;
+    --theme-shadow: rgba(5, 150, 105, 0.25);
+    --theme-ring: rgba(5, 150, 105, 0.4);
+  }
+
+  [data-theme='blue-corporate'] {
+    --theme-primary: #2563eb;
+    --theme-primary-hover: #1d4ed8;
+    --theme-primary-light: rgba(37, 99, 235, 0.14);
+    --theme-primary-border: #3b82f6;
+    --theme-primary-text: #2563eb;
+    --theme-gradient-header: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+    --theme-tag-color: #2563eb;
+    --theme-shadow: rgba(37, 99, 235, 0.25);
+    --theme-ring: rgba(37, 99, 235, 0.4);
+  }
+
+  [data-theme='violet-executive'] {
+    --theme-primary: #7c3aed;
+    --theme-primary-hover: #6d28d9;
+    --theme-primary-light: rgba(124, 58, 237, 0.14);
+    --theme-primary-border: #8b5cf6;
+    --theme-primary-text: #7c3aed;
+    --theme-gradient-header: linear-gradient(135deg, #7c3aed 0%, #9333ea 100%);
+    --theme-tag-color: #7c3aed;
+    --theme-shadow: rgba(124, 58, 237, 0.25);
+    --theme-ring: rgba(124, 58, 237, 0.4);
+  }
+
+  [data-theme='slate-minimal'] {
+    --theme-primary: #475569;
+    --theme-primary-hover: #334155;
+    --theme-primary-light: rgba(71, 85, 105, 0.16);
+    --theme-primary-border: #64748b;
+    --theme-primary-text: #475569;
+    --theme-gradient-header: linear-gradient(135deg, #475569 0%, #334155 100%);
+    --theme-tag-color: #475569;
+    --theme-shadow: rgba(71, 85, 105, 0.25);
+    --theme-ring: rgba(71, 85, 105, 0.4);
+  }
+
+  [data-theme='crimson-speed'] {
+    --theme-primary: #e11d48;
+    --theme-primary-hover: #be123c;
+    --theme-primary-light: rgba(225, 29, 72, 0.14);
+    --theme-primary-border: #f43f5e;
+    --theme-primary-text: #e11d48;
+    --theme-gradient-header: linear-gradient(135deg, #e11d48 0%, #dc2626 100%);
+    --theme-tag-color: #e11d48;
+    --theme-shadow: rgba(225, 29, 72, 0.25);
+    --theme-ring: rgba(225, 29, 72, 0.4);
+  }
+
   * {
     border-color: var(--color-slate-200);
   }
   .dark * {
     border-color: var(--color-slate-800);
   }
+}
+
+/* Dinamikus Téma Segédosztályok, amelyek az egész appban működnek */
+.theme-btn-primary {
+  background-color: var(--theme-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 12px var(--theme-shadow) !important;
+  transition: all 0.18s ease-in-out;
+}
+.theme-btn-primary:hover {
+  background-color: var(--theme-primary-hover) !important;
+  transform: translateY(-1px);
+}
+.theme-btn-primary:active {
+  transform: translateY(0);
+}
+
+.theme-bg-primary {
+  background-color: var(--theme-primary) !important;
+}
+
+.theme-bg-light {
+  background-color: var(--theme-primary-light) !important;
+}
+
+.theme-text-primary {
+  color: var(--theme-primary-text) !important;
+}
+
+.theme-border-primary {
+  border-color: var(--theme-primary-border) !important;
+}
+
+.theme-ring-primary {
+  --tw-ring-color: var(--theme-ring) !important;
+}
+
+.theme-gradient-header {
+  background-image: var(--theme-gradient-header) !important;
+}
+
+/* Téma szerinti aktív tab és kiemelés szabályok */
+.active-nav-tab {
+  background-color: var(--theme-primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px var(--theme-shadow) !important;
+}
+
+/* Téma szerinti jelölő pontok és kitűzők */
+.theme-badge {
+  background-color: var(--theme-primary-light) !important;
+  color: var(--theme-primary) !important;
+  border: 1px solid var(--theme-primary-border) !important;
+}
+
+/* Kiemelt subtab aktív állapot */
+.theme-subtab-active {
+  border-color: var(--theme-primary) !important;
+  color: var(--theme-primary) !important;
+  background-color: var(--theme-primary-light) !important;
+}
+
+/* Dinamikus Téma Szabályok - Kiterjesztés a teljes appra */
+[data-theme] button.bg-amber-600,
+[data-theme] button.bg-amber-500,
+[data-theme] .btn-theme-action {
+  background-color: var(--theme-primary) !important;
+  color: #ffffff !important;
+}
+[data-theme] button.bg-amber-600:hover,
+[data-theme] button.bg-amber-500:hover,
+[data-theme] .btn-theme-action:hover {
+  background-color: var(--theme-primary-hover) !important;
+}
+
+[data-theme] .text-amber-600,
+[data-theme] .text-amber-500,
+[data-theme] .dark .dark\:text-amber-400,
+[data-theme] .dark .dark\:text-amber-300 {
+  color: var(--theme-primary) !important;
+}
+
+[data-theme] .border-amber-500,
+[data-theme] .border-amber-600,
+[data-theme] .border-amber-400,
+[data-theme] .border-amber-300 {
+  border-color: var(--theme-primary-border) !important;
+}
+
+[data-theme] .bg-amber-50,
+[data-theme] .bg-amber-100,
+[data-theme] .bg-amber-500\/10,
+[data-theme] .bg-amber-500\/5,
+[data-theme] .dark .dark\:bg-amber-950\/60,
+[data-theme] .dark .dark\:bg-amber-950\/30,
+[data-theme] .dark .dark\:bg-amber-950\/20 {
+  background-color: var(--theme-primary-light) !important;
+}
+
+[data-theme] .from-amber-500,
+[data-theme] .from-amber-600 {
+  --tw-gradient-from: var(--theme-primary) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: var(--theme-primary-hover) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-from), var(--tw-gradient-to)) !important;
+}
+
+[data-theme] .to-amber-600,
+[data-theme] .to-amber-700 {
+  --tw-gradient-to: var(--theme-primary-hover) var(--tw-gradient-to-position) !important;
+}
+
+[data-theme] .ring-amber-500,
+[data-theme] .focus\:ring-amber-500:focus,
+[data-theme] .focus\:ring-amber-400:focus {
+  --tw-ring-color: var(--theme-ring) !important;
+  border-color: var(--theme-primary-border) !important;
+}
+
+[data-theme] ::selection {
+  background-color: var(--theme-primary) !important;
+  color: #ffffff !important;
 }
 
 @media print {
