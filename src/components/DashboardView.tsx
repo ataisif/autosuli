@@ -16,12 +16,27 @@ import {
   BellRing,
   RotateCcw,
   FileSignature,
+  Settings,
+  Sparkles,
+  ExternalLink,
+  Download,
+  ChevronDown,
+  Play,
+  Check,
 } from 'lucide-react';
-import { DatabaseState, Vehicle, Student, Lesson } from '../types';
-import { exportMotToCalendar, sendDesktopNotification } from '../services/notificationService';
+import { DatabaseState, Vehicle, Student, Lesson, CalendarClient, EmailClientMode } from '../types';
+import {
+  exportMotToCalendar,
+  exportMedicalToCalendar,
+  sendDesktopNotification,
+  runAutomatedEmailReminders,
+  openCalendarEventInClient,
+} from '../services/notificationService';
+import { CalendarSyncSettingsModal } from './CalendarSyncSettingsModal';
 
 interface DashboardViewProps {
   dbState: DatabaseState;
+  onUpdateDb?: (newState: DatabaseState) => void;
   onNavigate: (tab: string) => void;
   onQuickCheckout: () => void;
   onQuickNewLesson: () => void;
@@ -32,6 +47,7 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   dbState,
+  onUpdateDb,
   onNavigate,
   onQuickCheckout,
   onQuickNewLesson,
@@ -40,6 +56,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onExportExcel,
 }) => {
   const todayStr = new Date().toISOString().slice(0, 10);
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'calendar' | 'email' | 'logs'>('calendar');
+  const [syncBatchDropdownOpen, setSyncBatchDropdownOpen] = useState(false);
+  const [activeItemDropdownId, setActiveItemDropdownId] = useState<string | null>(null);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+
+  const preferredClient: CalendarClient = dbState.calendarSyncSettings?.preferredClient || 'gmail';
+  const autoEmailSettings = dbState.autoEmailSettings || {
+    enabled: true,
+    clientMode: 'gmail' as EmailClientMode,
+    lastRunDate: '2026-09-24',
+  };
+
+  const handleOpenCalendarSettings = (tab: 'calendar' | 'email' | 'logs' = 'calendar') => {
+    setModalTab(tab);
+    setCalendarModalOpen(true);
+  };
+
+  const handleRunRemindersQuick = () => {
+    if (!onUpdateDb) return;
+    const result = runAutomatedEmailReminders(dbState, true);
+    onUpdateDb(result.updatedState);
+    const total = result.motRemindersSent + result.medRemindersSent;
+    setActionSuccessMsg(
+      total > 0
+        ? `Sikeres futtatás: ${result.motRemindersSent} db műszaki és ${result.medRemindersSent} db tanulói orvosi értesítő feldolgozva!`
+        : 'Az ellenőrzés lefutott: Nincs új esedékes határidő.'
+    );
+    setTimeout(() => setActionSuccessMsg(null), 4000);
+  };
 
   // Műszaki vizsga lejárati számítások
   const getDaysUntil = (targetDateStr: string) => {
@@ -351,7 +397,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Jobb oszlop: Sürgős Határidők & Teendők (5 oszlop) */}
         <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center space-x-2">
               <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400">
                 <AlertTriangle className="w-5 h-5" />
@@ -361,20 +407,169 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Sürgős Határidők & Teendők
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Műszaki vizsgák és orvosi érvényességek
+                  Műszaki vizsgák, tanulói orvosiak & naptár szinkron
                 </p>
               </div>
             </div>
 
-            <button
-              onClick={handleSendAllAlerts}
-              className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors"
-              title="Asztali figyelmeztetés küldése a teendőkről"
-            >
-              <BellRing className="w-3.5 h-3.5 text-amber-500" />
-              <span>Riasztás</span>
-            </button>
+            <div className="flex items-center space-x-1.5 flex-wrap">
+              {/* Naptár Szinkronizáció Lenyíló Gomb */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setSyncBatchDropdownOpen(!syncBatchDropdownOpen)}
+                  className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 text-xs font-semibold transition-colors cursor-pointer border border-sky-200/60 dark:border-sky-800/60"
+                  title="Határidők szinkronizálása Gmail, Outlook vagy Thunderbird naptárral"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Naptár Szinkron</span>
+                  <ChevronDown className="w-3 h-3 ml-0.5 opacity-70" />
+                </button>
+
+                {syncBatchDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setSyncBatchDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-1.5 w-60 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-1.5 z-40 text-xs animate-in fade-in zoom-in-95 space-y-1">
+                      <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Szinkronizálás klienssel
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSyncBatchDropdownOpen(false);
+                          handleOpenCalendarSettings('calendar');
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="w-2 h-2 rounded-full bg-red-500" />
+                          <span>Google Naptár (Gmail)</span>
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSyncBatchDropdownOpen(false);
+                          handleOpenCalendarSettings('calendar');
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-500" />
+                          <span>Microsoft Outlook</span>
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSyncBatchDropdownOpen(false);
+                          handleOpenCalendarSettings('calendar');
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-800 dark:text-slate-200 flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="w-2 h-2 rounded-full bg-sky-500" />
+                          <span>Mozilla Thunderbird (.ics)</span>
+                        </span>
+                        <Download className="w-3 h-3 text-slate-400" />
+                      </button>
+                      <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSyncBatchDropdownOpen(false);
+                            handleOpenCalendarSettings('calendar');
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400 font-semibold flex items-center space-x-1.5 cursor-pointer"
+                        >
+                          <Settings className="w-3 h-3" />
+                          <span>Részletes Naptár Beállítások...</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Beállítások Modal Gomb */}
+              <button
+                type="button"
+                onClick={() => handleOpenCalendarSettings('email')}
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-semibold transition-colors cursor-pointer border border-amber-200/60 dark:border-amber-800/60"
+                title="Naptár és automatikus email emlékeztetők beállítása"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>Beállítások</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendAllAlerts}
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                title="Asztali figyelmeztetés küldése a teendőkről"
+              >
+                <BellRing className="w-3.5 h-3.5 text-amber-500" />
+                <span>Riasztás</span>
+              </button>
+            </div>
           </div>
+
+          {/* Automata Email Emlékeztetők Állapotjelző és Gyorsfuttató Sáv */}
+          <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850 flex flex-col xs:flex-row xs:items-center justify-between gap-2 text-[11px]">
+            <div className="flex items-center space-x-2">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  autoEmailSettings.enabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                }`}
+              />
+              <span className="text-slate-700 dark:text-slate-300">
+                <strong>Automata Email Értesítők:</strong>{' '}
+                {autoEmailSettings.enabled ? (
+                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold uppercase">
+                    Aktív ({autoEmailSettings.clientMode})
+                  </span>
+                ) : (
+                  <span className="text-slate-400">Kikapcsolva</span>
+                )}
+              </span>
+              <span className="text-slate-400 hidden sm:inline">•</span>
+              <span className="text-slate-500 hidden sm:inline">
+                Preferált naptár: <strong className="uppercase">{preferredClient}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleRunRemindersQuick}
+                className="px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-600 text-white font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+                title="Automatikus határidős ellenőrzés és kiküldés azonnali futtatása"
+              >
+                <Play className="w-3 h-3 fill-current" />
+                <span>Futtatás Most</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleOpenCalendarSettings('logs')}
+                className="px-2 py-1 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                title="Kiküldési előzmények megtekintése"
+              >
+                Napló
+              </button>
+            </div>
+          </div>
+
+          {actionSuccessMsg && (
+            <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] flex items-center space-x-2 animate-in fade-in">
+              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>{actionSuccessMsg}</span>
+            </div>
+          )}
 
           {/* Műszaki vizsga határidők listája */}
           <div className="space-y-2">
@@ -392,10 +587,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {motAlerts.map((m) => {
                   const isExpired = m.daysLeft <= 0;
                   const isUrgent = m.daysLeft <= 15;
+                  const isDropdownOpen = activeItemDropdownId === `mot-${m.vehicle.id}`;
+
                   return (
                     <div
                       key={m.vehicle.id}
-                      className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                      className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 transition-all ${
                         isExpired
                           ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50 text-red-900 dark:text-red-200'
                           : isUrgent
@@ -415,20 +612,71 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-1 shrink-0">
-                        {/* Naptárba írás gomb (.ics) */}
-                        <button
-                          onClick={() => exportMotToCalendar(m.vehicle)}
-                          className="p-1.5 rounded-md hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
-                          title="Műszaki vizsga beírása a naptárba (.ics letöltés)"
-                        >
-                          <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        </button>
+                      <div className="flex items-center space-x-1 shrink-0 relative">
+                        {/* Naptár szinkron gomb választott klienssel vagy lenyílóval */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveItemDropdownId(isDropdownOpen ? null : `mot-${m.vehicle.id}`)
+                            }
+                            className="p-1.5 rounded-md hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 cursor-pointer flex items-center space-x-0.5"
+                            title={`Műszaki vizsga naptárba írása (${preferredClient.toUpperCase()})`}
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                            <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+                          </button>
+
+                          {isDropdownOpen && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-30"
+                                onClick={() => setActiveItemDropdownId(null)}
+                              />
+                              <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-1 z-40 text-xs animate-in fade-in">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    exportMotToCalendar(m.vehicle, 'gmail');
+                                    setActiveItemDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-800 dark:text-slate-200 flex items-center space-x-1.5"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                                  <span>Google Naptár</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    exportMotToCalendar(m.vehicle, 'outlook');
+                                    setActiveItemDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 flex items-center space-x-1.5"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                  <span>Outlook Naptár</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    exportMotToCalendar(m.vehicle, 'thunderbird');
+                                    setActiveItemDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-800 dark:text-slate-200 flex items-center space-x-1.5"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-sky-500" />
+                                  <span>Thunderbird (.ics)</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
 
                         {/* Email küldés sablonnal */}
                         <button
+                          type="button"
                           onClick={() => onOpenEmailWithTemplate('mot', m.vehicle)}
-                          className="p-1.5 rounded-md hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"
+                          className="p-1.5 rounded-md hover:bg-white/80 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 cursor-pointer"
                           title="Értesítő email küldése a műszaki vizsgáról"
                         >
                           <Mail className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
@@ -454,34 +702,109 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {medicalAlerts.map((med) => (
-                  <div
-                    key={med.student.id}
-                    className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs flex items-center justify-between gap-2"
-                  >
-                    <div>
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">
-                        {med.student.name}
+                {medicalAlerts.map((med) => {
+                  const isDropdownOpen = activeItemDropdownId === `med-${med.student.id}`;
+
+                  return (
+                    <div
+                      key={med.student.id}
+                      className="p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs flex items-center justify-between gap-2"
+                    >
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                          {med.student.name}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Orvosi lejár: {med.student.medicalExamExpiry} ({med.daysLeft} nap)
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Orvosi lejár: {med.student.medicalExamExpiry} ({med.daysLeft} nap)
+
+                      <div className="flex items-center space-x-1 shrink-0 relative">
+                        {/* Naptár szinkron a tanulói orvosira */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveItemDropdownId(isDropdownOpen ? null : `med-${med.student.id}`)
+                            }
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                            title="Orvosi lejárat hozzáadása naptárhoz"
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                          </button>
+
+                          {isDropdownOpen && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-30"
+                                onClick={() => setActiveItemDropdownId(null)}
+                              />
+                              <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 p-1 z-40 text-xs animate-in fade-in">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    exportMedicalToCalendar(med.student, 'gmail');
+                                    setActiveItemDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-800 dark:text-slate-200 flex items-center space-x-1.5"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                                  <span>Google Naptár</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    exportMedicalToCalendar(med.student, 'outlook');
+                                    setActiveItemDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-800 dark:text-slate-200 flex items-center space-x-1.5"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                  <span>Outlook Naptár</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    exportMedicalToCalendar(med.student, 'thunderbird');
+                                    setActiveItemDropdownId(null);
+                                  }}
+                                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-950/40 text-slate-800 dark:text-slate-200 flex items-center space-x-1.5"
+                                >
+                                  <span className="w-2 h-2 rounded-full bg-sky-500" />
+                                  <span>Thunderbird (.ics)</span>
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Email gomb a tanulónak */}
+                        <button
+                          type="button"
+                          onClick={() => onOpenEmailWithTemplate('medical', med.student)}
+                          className="flex items-center space-x-1 px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 text-[11px] font-medium cursor-pointer"
+                          title="Figyelmeztető email a tanulónak"
+                        >
+                          <Mail className="w-3 h-3" />
+                          <span>Emlékeztető</span>
+                        </button>
                       </div>
                     </div>
-
-                    <button
-                      onClick={() => onOpenEmailWithTemplate('medical', med.student)}
-                      className="flex items-center space-x-1 px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-200 text-[11px] font-medium"
-                      title="Figyelmeztető email a tanulónak"
-                    >
-                      <Mail className="w-3 h-3" />
-                      <span>Emlékeztető</span>
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
+
+        {/* Naptár Szinkronizáció és Automata Értesítők Modál */}
+        <CalendarSyncSettingsModal
+          isOpen={calendarModalOpen}
+          onClose={() => setCalendarModalOpen(false)}
+          dbState={dbState}
+          onUpdateDb={onUpdateDb || (() => {})}
+          initialTab={modalTab}
+        />
       </div>
     </div>
   );

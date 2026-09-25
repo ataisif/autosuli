@@ -293,6 +293,54 @@ export interface AppLogoConfig {
   uploadedFileName?: string;
 }
 
+export type CalendarClient = 'gmail' | 'outlook' | 'thunderbird' | 'ics';
+export type EmailClientMode = 'gmail' | 'outlook' | 'thunderbird' | 'mailto' | 'direct';
+
+export interface CalendarSyncSettings {
+  preferredClient: CalendarClient;
+  autoSyncMot: boolean;
+  autoSyncMedical: boolean;
+  autoSyncLessons: boolean;
+  autoSyncMaintenance: boolean;
+  reminderDaysAhead: number[]; // pl. [30, 15, 7, 1]
+  calendarName: string;
+  defaultAlarmMinutes: number; // pl. 1440 (1 nap)
+}
+
+export interface AutoEmailReminderSettings {
+  enabled: boolean;
+  clientMode: EmailClientMode;
+  checkFrequency: 'daily' | 'on_open' | 'weekly';
+  lastRunDate?: string; // YYYY-MM-DD
+  motRecipientEmail: string; // pl. muszaki@autosuli.hu
+  bccSchoolAdmin: boolean;
+  schoolAdminEmail: string;
+  motThresholdDays: number; // pl. 30
+  medicalThresholdDays: number; // pl. 45
+  sendDuplicateIntervalDays: number; // pl. 7 napig ne küldje újra ugyanarra
+  customMotSubject?: string;
+  customMotBody?: string;
+  customMedicalSubject?: string;
+  customMedicalBody?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  senderName?: string;
+}
+
+export interface EmailReminderLog {
+  id: string;
+  timestamp: string; // ISO
+  targetId: string; // vehicleId vagy studentId
+  targetName: string;
+  type: 'mot' | 'medical' | 'schedule';
+  recipient: string;
+  subject: string;
+  clientUsed: EmailClientMode;
+  status: 'sent' | 'opened_in_client' | 'queued';
+  notes?: string;
+}
+
 export interface DesignTemplate {
   id: DesignTemplateId;
   name: string;
@@ -318,6 +366,9 @@ export interface DatabaseState {
   auditLogs: AuditLogEntry[];
   currentTheme: DesignTemplateId;
   appLogo?: AppLogoConfig;
+  calendarSyncSettings?: CalendarSyncSettings;
+  autoEmailSettings?: AutoEmailReminderSettings;
+  emailReminderLogs?: EmailReminderLog[];
   isEncrypted: boolean;
   encryptionPasswordHash?: string;
   lastSaved: string;

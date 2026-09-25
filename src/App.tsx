@@ -21,6 +21,7 @@ import {
   evaluateSystemAlerts,
   sendDesktopNotification,
   requestDesktopNotificationPermission,
+  runAutomatedEmailReminders,
 } from './services/notificationService';
 import { exportFullDatabaseToExcel } from './services/excelService';
 import { THEME_TEMPLATES, applyThemeToDom } from './services/themeService';
@@ -240,6 +241,31 @@ export default function App() {
       });
     }
   };
+
+  // Automata határidős email értesítők ellenőrzése alkalmazás megnyitásakor
+  useEffect(() => {
+    if (currentUser && dbState.autoEmailSettings?.enabled) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const lastRun = dbState.autoEmailSettings.lastRunDate;
+      const freq = dbState.autoEmailSettings.checkFrequency || 'daily';
+
+      const shouldRun =
+        freq === 'on_open' ||
+        (freq === 'daily' && lastRun !== todayStr) ||
+        (freq === 'weekly' &&
+          (!lastRun || new Date().getTime() - new Date(lastRun).getTime() > 6 * 86400000));
+
+      if (shouldRun) {
+        const result = runAutomatedEmailReminders(dbState, false, 'direct');
+        if (result.newLogs.length > 0) {
+          handleUpdateDb(result.updatedState);
+          sendDesktopNotification('AutoSuli Automata Határidős Rendszer', {
+            body: `${result.motRemindersSent} db műszaki és ${result.medRemindersSent} db tanulói orvosi értesítés feldolgozva.`,
+          });
+        }
+      }
+    }
+  }, [currentUser, dbState.autoEmailSettings?.enabled]);
 
   // Gyorsbillentyűk (Alt + 1..7, Alt + S, ?)
   useEffect(() => {
@@ -770,6 +796,7 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <DashboardView
             dbState={dbState}
+            onUpdateDb={handleUpdateDb}
             onNavigate={(tab) => setActiveTab(tab)}
             onQuickCheckout={() => setActiveTab('vehicles')}
             onQuickNewLesson={() => setActiveTab('schedule')}

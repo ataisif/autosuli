@@ -83,7 +83,22 @@ export function loadStoredDatabase(): { state: DatabaseState; isLocked: boolean 
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as DatabaseState;
-      return { state: parsed, isLocked: false };
+      return {
+        state: {
+          ...initialDatabase,
+          ...parsed,
+          schoolCompany: parsed.schoolCompany || initialDatabase.schoolCompany,
+          courseOffers: parsed.courseOffers?.length ? parsed.courseOffers : initialDatabase.courseOffers,
+          courseRegistrations: parsed.courseRegistrations || initialDatabase.courseRegistrations || [],
+          users: parsed.users?.length ? parsed.users : initialDatabase.users,
+          auditLogs: parsed.auditLogs || initialDatabase.auditLogs || [],
+          currentTheme: parsed.currentTheme || initialDatabase.currentTheme || 'amber-classic',
+          calendarSyncSettings: parsed.calendarSyncSettings || initialDatabase.calendarSyncSettings,
+          autoEmailSettings: parsed.autoEmailSettings || initialDatabase.autoEmailSettings,
+          emailReminderLogs: parsed.emailReminderLogs || initialDatabase.emailReminderLogs || [],
+        },
+        isLocked: false,
+      };
     }
   } catch (e) {
     console.error('Error loading local database:', e);
@@ -152,6 +167,9 @@ export async function loadLocalDatabase(password?: string): Promise<DatabaseStat
         users: parsed.users?.length ? parsed.users : initialDatabase.users,
         auditLogs: parsed.auditLogs || initialDatabase.auditLogs || [],
         currentTheme: parsed.currentTheme || initialDatabase.currentTheme || 'amber-classic',
+        calendarSyncSettings: parsed.calendarSyncSettings || initialDatabase.calendarSyncSettings,
+        autoEmailSettings: parsed.autoEmailSettings || initialDatabase.autoEmailSettings,
+        emailReminderLogs: parsed.emailReminderLogs || initialDatabase.emailReminderLogs || [],
       };
     }
   } catch (e) {
